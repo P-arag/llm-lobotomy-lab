@@ -1,0 +1,34 @@
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Secrets and local configuration
+.env
+.env.*
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ML data, models, and outputs
+data/
+models/
+checkpoints/
+artifacts/
+outputs/
+logs/
+*.ckpt
+*.pt
+*.pth
+*.onnx
+
+# Tool caches
+.cache/
+.pytest_cache/
+
+# OS files
+.DS_Store
+Thumbs.db

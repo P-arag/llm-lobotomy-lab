@@ -1,0 +1,30 @@
+[project]
+name = "llm-lobotomy-lab"
+version = "0.1.0"
+description = "Tools for exploring and steering language-model activations."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "accelerate>=1.3",
+    "bitsandbytes>=0.45",
+    "flask>=3.1",
+    "matplotlib>=3.9",
+    "numpy>=2.1",
+    "python-dotenv>=1.0",
+    "scikit-learn>=1.6",
+    "seaborn>=0.13",
+    "torch>=2.6",
+    "transformers>=4.49",
+    "umap-learn>=0.5.7",
+]
+
+[tool.uv]
+package = false
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
