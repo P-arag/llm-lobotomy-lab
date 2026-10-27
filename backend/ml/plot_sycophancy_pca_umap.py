@@ -3,7 +3,7 @@ Standalone script: records layer-13 residual-stream activations of Llama-2-7b-ch
 on the sycophancy A/B dataset, then plots PCA (2 components) and UMAP (2 and 3
 components) of sycophantic vs non-sycophantic activations.
 
-Run from the repo root with the `fl` conda env:
+Run from the repo root with the conda env:
     python plot_sycophancy_pca_umap.py
 """
 
@@ -23,9 +23,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 load_dotenv()
 
 MODEL_ID = "meta-llama/Llama-2-7b-chat-hf"
-SYCOPHANCY_DATA_PATH = os.path.join("datasets", "sycophancy", "refusal", "generate_dataset.json")
+SYCOPHANCY_DATA_PATH = os.path.join("datasets", "sycophancy.json")
+REFUSAL_DATA_PATH = os.path.join("datasets", "refusal.json")
+
+
 LAYER = 10
-N_PER_CLASS = 200  # number of sycophantic and non-sycophantic examples to collect
+N_PER_CLASS = 400  # number of sycophantic and non-sycophantic examples to collect
 POSITION = -2  # second-to-last token, same convention as generate_vectors.py
 
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -39,6 +42,9 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 # the model as a completed chat prompt, and we keep the layer-k activation.
 with open(SYCOPHANCY_DATA_PATH) as f:
     sycophancy_data = json.load(f)
+
+with open(REFUSAL_DATA_PATH) as f:
+    refusal_data = json.load(f)
 
 tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=HF_TOKEN)
 # 4-bit NF4 quantization: a full-precision 7B (13.5 GB) does not fit this 8 GB
@@ -76,6 +82,10 @@ def activation_for(question, answer):
     return captured[0]
 
 
+refusal_acts = []
+for item in refusal_data:
+    refusal_acts.append(activation_for(item["question"], item["answer"]))
+
 pos_acts, neg_acts = [], []
 for item in sycophancy_data:
     pos_acts.append(activation_for(item["question"], item["answer_matching_behavior"]))
@@ -86,8 +96,9 @@ for item in sycophancy_data:
 
 pos_acts = np.stack(pos_acts)
 neg_acts = np.stack(neg_acts)
-acts = np.concatenate([pos_acts, neg_acts])
-labels = np.array(["Sycophantic"] * len(pos_acts) + ["Non-sycophantic"] * len(neg_acts))
+refusal_acts = np.stack(refusal_acts)
+acts = np.concatenate([pos_acts, neg_acts, refusal_acts])
+labels = np.array(["Sycophantic"] * len(pos_acts) + ["Non-sycophantic"] * len(neg_acts) + ["Refusal"] * len(refusal_acts))
 colors = labels == "Sycophantic"
 print(f"activations: {acts.shape} (layer {LAYER})")
 
