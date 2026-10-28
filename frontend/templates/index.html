@@ -13,8 +13,8 @@
   <script src="{{ url_for('static', filename='vendor/plotly.min.js') }}" defer></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Outfit:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5021" />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5024" />
 </head>
 <body>
 
@@ -117,7 +117,6 @@
       <div class="chat-row" id="chatRow">
         <div class="chat-panel cursor-card" id="panelNormal" data-trait="unsteered">
           <div class="cursor-card__border" aria-hidden="true"></div>
-          <div class="cursor-card__bg" aria-hidden="true"></div>
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <div class="chat-panel__header chat-panel__header--normal">
             <span class="dot dot--red"></span>
@@ -130,7 +129,6 @@
         </div>
         <div class="chat-panel cursor-card" id="panelSteered" data-trait="steered">
           <div class="cursor-card__border" aria-hidden="true"></div>
-          <div class="cursor-card__bg" aria-hidden="true"></div>
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <div class="chat-panel__header chat-panel__header--steered">
             <span class="dot dot--green"></span>
@@ -155,7 +153,6 @@
         <form class="prompt-bar__form" id="promptForm" autocomplete="off">
           <div class="prompt-pill cursor-card" id="promptPill">
             <div class="cursor-card__border" aria-hidden="true"></div>
-            <div class="cursor-card__bg" aria-hidden="true"></div>
             <div class="cursor-card__illumination" aria-hidden="true"></div>
             <svg class="prompt-pill__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -183,7 +180,6 @@
       <!-- Controls with Cursor Illumination -->
       <div class="controls-card cursor-card" data-trait="controls">
         <div class="cursor-card__border" aria-hidden="true"></div>
-        <div class="cursor-card__bg" aria-hidden="true"></div>
         <div class="cursor-card__illumination" aria-hidden="true"></div>
         <div class="controls-card__header">
           <h2 class="card-title">
@@ -311,7 +307,6 @@
       <div class="plots-row">
         <div class="plot-card cursor-card" data-trait="pca">
           <div class="cursor-card__border" aria-hidden="true"></div>
-          <div class="cursor-card__bg" aria-hidden="true"></div>
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--cyan"></span>
@@ -321,7 +316,6 @@
         </div>
         <div class="plot-card cursor-card" data-trait="umap">
           <div class="cursor-card__border" aria-hidden="true"></div>
-          <div class="cursor-card__bg" aria-hidden="true"></div>
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--purple"></span>
@@ -334,6 +328,6 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=5021" defer></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=5024" defer></script>
 </body>
 </html>

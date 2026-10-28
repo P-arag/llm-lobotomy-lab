@@ -34,8 +34,6 @@ const promptPill    = $("#promptPill");
 const promptForm    = $("#promptForm");
 const promptInput   = $("#promptInput");
 const sendBtn       = $("#sendBtn");
-const presetBtns    = $("#presetBtns");
-const modeBadge     = $("#modeBadge");
 
 const responseLegend = $("#responseLegend");
 
@@ -194,7 +192,6 @@ const LABELS = ["Thinking", "Searching", "Analyzing", "Composing"];
 // Easing
 const easeOut   = (t) => 1 - Math.pow(1 - t, 3);
 const easeIO    = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-const easeIn    = (t) => t * t * t;
 const spring    = (t) => { const c4 = (2 * Math.PI) / 3; return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1; };
 
 function sleep(ms) { return new Promise(r => setTimeout(r, Math.max(0, ms))); }
@@ -433,22 +430,6 @@ async function runAnimation(prompt) {
   splitR.style.transform = "scale(0)";
 
   // ─── Phase 5: Reveal responses word-by-word ──────────────────
-
-  // Update mock badge if present
-  if (modeBadge) {
-    if (genData.mock) {
-      modeBadge.textContent = "MOCK MODE";
-      modeBadge.style.color = "#d29922";
-      modeBadge.style.borderColor = "#d29922";
-    } else {
-      modeBadge.textContent = "LIVE";
-      modeBadge.style.color = "#3fb950";
-      modeBadge.style.borderColor = "#3fb950";
-    }
-  }
-
-  // Pass token data (which includes comma/delta values) to revealResponse
-  // so color coding renders directly inside the chat response window!
   const unsteeredData = (genData.unsteered && (genData.unsteered.tokens || genData.unsteered.text)) || genData.unsteered || "";
   const steeredData   = (genData.steered   && (genData.steered.tokens   || genData.steered.text))   || genData.steered   || "";
 
@@ -668,24 +649,6 @@ function deltaToColor(delta) {
     textColor: t > 0.35 ? "#6ee7b7" : "#a7f3d0",
     toString() { return this.bg; }
   };
-}
-
-function renderHeatmap(container, tokensOrText) {
-  if (!container) return;
-  container.innerHTML = "";
-  const tokens = parseTokensWithHeatmap(tokensOrText);
-  tokens.forEach((t) => {
-    const span = document.createElement("span");
-    span.className = "heatmap-token";
-    span.textContent = t.token;
-    const colors = deltaToColor(t.value);
-    span.style.backgroundColor = colors.bg;
-    if (colors.border !== "transparent") {
-      span.style.border = `1px solid ${colors.border}`;
-    }
-    span.title = `delta ${t.value > 0 ? "+" : ""}${t.value.toFixed(3)}`;
-    container.appendChild(span);
-  });
 }
 
 function appendMsg(container, role, text) {
@@ -933,29 +896,6 @@ promptForm.addEventListener("submit", (e) => {
   runAnimation(text);
 });
 
-// Presets (skipped if presetBtns container is removed)
-async function loadPresets() {
-  if (!presetBtns) return;
-  try {
-    const res = await fetch("/api/presets");
-    const presets = await res.json();
-    presets.forEach((p) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn--preset";
-      btn.textContent = p.label;
-      btn.addEventListener("click", () => {
-        promptInput.value = p.text;
-        promptInput.focus();
-        sendBtn.setAttribute("data-ready", "");
-      });
-      presetBtns.appendChild(btn);
-    });
-  } catch (err) {
-    console.warn("Could not load presets:", err);
-  }
-}
-
 
 // ══════════════════════════════════════════════════════════════════
 //  PLOTLY: PCA + UMAP
@@ -1094,9 +1034,9 @@ function plotUMAP(data) {
     margin: { t: 10, r: 0, b: 0, l: 0 },
     scene: {
       bgcolor: pt.bg,
-      xaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "" },
-      yaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "" },
-      zaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "" },
+      xaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
+      yaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
+      zaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
       camera: { eye: { x: 1.6, y: 1.6, z: 1.0 } },
     },
     legend: { x: 0, y: 1, bgcolor: "rgba(0,0,0,0)", font: { size: 10, color: pt.text } },
@@ -1903,8 +1843,8 @@ function initDotMatrixTitle() {
 
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
 
-    // 1. Inactive Background Dots
-    ctx.fillStyle = isLight ? "rgba(15, 23, 42, 0.08)" : "rgba(255, 255, 255, 0.05)";
+    // 1. Inactive Background Dots (subtle hint on dark, ultra-faint on light so no gray box appears)
+    ctx.fillStyle = isLight ? "rgba(148, 163, 184, 0.025)" : "rgba(255, 255, 255, 0.04)";
     ctx.beginPath();
     const inactiveRadius = (dotSize * 0.5) * 0.65;
     for (let i = 0; i < dots.length; i++) {
@@ -1919,9 +1859,10 @@ function initDotMatrixTitle() {
     // 2. Active Illuminated Dots with Multi-Stop Glowing Gradient
     const grad = ctx.createLinearGradient(offsetX, 0, offsetX + cols * step, 0);
     if (isLight) {
-      grad.addColorStop(0.0, "#0f172a");
-      grad.addColorStop(0.5, "#0369a1");
-      grad.addColorStop(1.0, "#0284c7");
+      grad.addColorStop(0.0, "#0369a1");
+      grad.addColorStop(0.35, "#0284c7");
+      grad.addColorStop(0.7, "#2563eb");
+      grad.addColorStop(1.0, "#7c3aed");
     } else {
       grad.addColorStop(0.0, "#ffffff");
       grad.addColorStop(0.3, "#bae6fd");
@@ -2015,7 +1956,6 @@ document.addEventListener("DOMContentLoaded", () => {
   } catch (err) {
     console.warn("Halftone shader init failed:", err);
   }
-  loadPresets();
   loadPCA(currentLayer);
   loadUMAP(currentLayer);
   if (promptInput) promptInput.focus();
