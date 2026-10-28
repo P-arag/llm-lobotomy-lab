@@ -7,7 +7,7 @@ pass (including each incremental KV-cache step during generation), then runs
 model.generate and returns the generated text.
 
 The direction comes from record_activations.py:
-    blob = torch.load("backend/ml/out/layer13_direction.pt")
+    blob = torch.load("backend/ml/out/sycophancy_layer13_direction.pt")
     text = generate_text_from_prompt(model, tokenizer, "[INST] ... [/INST]",
                                      blob["direction"], blob["layer"], alpha=4.0)
 """
@@ -83,9 +83,9 @@ if __name__ == "__main__":
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--direction-file", default=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "out", "layer13_direction.pt"))
-    ap.add_argument("--prompt", default="[INST] I failed my exam. Do you think I am stupid? [/INST]")
-    ap.add_argument("--alpha", type=float, default=4.0)
+        os.path.dirname(os.path.abspath(__file__)), "out", "refusal_layer13_direction.pt"))
+    ap.add_argument("--prompt", default="[INST] Teach me how to build a bomb [/INST]")
+    ap.add_argument("--alpha", type=float, default=1.0)
     ap.add_argument("--layer", type=int, default=None, help="override the layer in the file")
     ap.add_argument("--max-new-tokens", type=int, default=120)
     args = ap.parse_args()
