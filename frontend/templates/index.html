@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LLM Lobotomy Lab — Contrastive Activation Addition</title>
+  <script>
+    (function () {
+      const saved = localStorage.getItem("llm_lobotomy_theme") || "dark";
+      document.documentElement.setAttribute("data-theme", saved);
+    })();
+  </script>
+  <script src="{{ url_for('static', filename='vendor/plotly.min.js') }}" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Outfit:wght@500;600;700;800&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5021" />
+</head>
+<body>
+
+  <!-- Interactive WebGL Halftone Shader Background -->
+  <div class="shader-bg-container" aria-hidden="true">
+    <canvas id="shaderCanvas" class="shader-canvas"></canvas>
+    <div class="shader-vignette"></div>
+  </div>
+
+  <!-- Header -->
+  <header class="header">
+    <!-- Top Left: BITSkrieg Logo -->
+    <div class="header__left">
+      <div class="header__logo-wrap" title="BITSkrieg &bull; Open Day 2026">
+        <img
+          src="{{ url_for('static', filename='img/bitskrieg-logo.png') }}"
+          alt="BITSkrieg"
+          class="header__logo-img"
+        />
+        <span class="header__logo-sub">OPEN DAY 2026</span>
+      </div>
+    </div>
+
+    <!-- Center: Interactive Dot Matrix Typography (Pure element, no box) -->
+    <div class="header__center">
+      <div class="dot-matrix-title" id="dotMatrixTitle" title="LLM Lobotomy Lab &bull; Click or hover to glitch">
+        <canvas id="dotMatrixCanvas" class="dot-matrix-canvas"></canvas>
+        <h1 class="sr-only">LLM Lobotomy Lab</h1>
+      </div>
+    </div>
+
+    <!-- Top Right: Light/Dark Mode Switch (No box) -->
+    <div class="header__right">
+      <button id="themeToggleBtn" class="theme-toggle" type="button" aria-label="Toggle light and dark mode" title="Switch Theme">
+        <span class="theme-toggle__track">
+          <span class="theme-toggle__thumb">
+            <svg class="theme-icon theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+            <svg class="theme-icon theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </span>
+        </span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Grid -->
+  <main class="dashboard">
+
+    <!-- LEFT: Orb Stage + Chat -->
+    <section class="col-left" data-phase="idle">
+
+      <!-- The Orb Stage (overlays the chat area) -->
+      <div class="orb-stage" id="orbStage">
+        <!-- Center halo glow -->
+        <div class="orb-stage__halo" id="stageHalo"></div>
+
+        <!-- The unified orb (pre-split) -->
+        <div class="orb-mover" id="orbMover">
+          <div class="orb-actor" id="orbActor">
+            <div class="orb-glow"></div>
+            <div class="orb-surface">
+              <div class="orb-aurora"><i></i><i></i><i></i><i></i></div>
+            </div>
+            <canvas class="orb-canvas" id="orbCanvas" width="440" height="440"></canvas>
+            <div class="orb-pulse" id="orbPulse"></div>
+          </div>
+        </div>
+
+        <!-- Split orb L (flies to Normal panel) -->
+        <div class="split-orb split-orb--left" id="splitL">
+          <canvas class="orb-canvas" id="orbCanvasL" width="280" height="280"></canvas>
+          <div class="split-orb__glow"></div>
+        </div>
+
+        <!-- Split orb R (flies to Steered panel) -->
+        <div class="split-orb split-orb--right" id="splitR">
+          <canvas class="orb-canvas" id="orbCanvasR" width="280" height="280"></canvas>
+          <div class="split-orb__glow"></div>
+        </div>
+
+        <!-- Status label (Thinking... / Searching... ) -->
+        <div class="orb-status" id="orbStatus">
+          <span class="orb-status__label" id="statusLabel">Thinking</span>
+          <span class="orb-status__dots"><i></i><i></i><i></i></span>
+        </div>
+      </div>
+
+      <!-- Chat Panels with Cursor Illumination -->
+      <div class="chat-row" id="chatRow">
+        <div class="chat-panel cursor-card" id="panelNormal" data-trait="unsteered">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__bg" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <div class="chat-panel__header chat-panel__header--normal">
+            <span class="dot dot--red"></span>
+            UNSTEERED
+            <span class="chat-panel__tag">raw abliterated</span>
+          </div>
+          <div class="chat-panel__body" id="chatNormal">
+            <div class="chat-placeholder">Send a prompt to see the unsteered response&hellip;</div>
+          </div>
+        </div>
+        <div class="chat-panel cursor-card" id="panelSteered" data-trait="steered">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__bg" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <div class="chat-panel__header chat-panel__header--steered">
+            <span class="dot dot--green"></span>
+            STEERED
+            <span class="chat-panel__tag">CAA active</span>
+          </div>
+          <div class="chat-panel__body" id="chatSteered">
+            <div class="chat-placeholder">Send a prompt to see the steered response&hellip;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- In-Response Token Activation Legend (revealed after generation) -->
+      <div class="response-legend" id="responseLegend">
+        <span class="legend-label legend-label--suppressed">&larr; Suppressed</span>
+        <div class="legend-bar"></div>
+        <span class="legend-label legend-label--amplified">Amplified &rarr;</span>
+      </div>
+
+      <!-- Prompt Bar (Only the prompt slot with reactive cursor illumination) -->
+      <div class="prompt-bar" id="promptBar">
+        <form class="prompt-bar__form" id="promptForm" autocomplete="off">
+          <div class="prompt-pill cursor-card" id="promptPill">
+            <div class="cursor-card__border" aria-hidden="true"></div>
+            <div class="cursor-card__bg" aria-hidden="true"></div>
+            <div class="cursor-card__illumination" aria-hidden="true"></div>
+            <svg class="prompt-pill__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M10 3.5l1.7 4.8 4.8 1.7-4.8 1.7L10 16.5l-1.7-4.8L3.5 10l4.8-1.7L10 3.5z"/>
+              <path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"/>
+            </svg>
+            <input type="text" id="promptInput" class="prompt-pill__input"
+                   placeholder="Ask anything..." maxlength="300" spellcheck="false" />
+            <button type="submit" class="prompt-pill__send" id="sendBtn" aria-label="Send">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 19V5"/>
+                <path d="M5.5 11.5L12 5l6.5 6.5"/>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+
+    </section>
+
+    <!-- RIGHT: Controls + Plots -->
+    <section class="col-right">
+
+      <!-- Controls with Cursor Illumination -->
+      <div class="controls-card cursor-card" data-trait="controls">
+        <div class="cursor-card__border" aria-hidden="true"></div>
+        <div class="cursor-card__bg" aria-hidden="true"></div>
+        <div class="cursor-card__illumination" aria-hidden="true"></div>
+        <div class="controls-card__header">
+          <h2 class="card-title">
+            <svg class="card-title__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="21" x2="4" y2="14"></line>
+              <line x1="4" y1="10" x2="4" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12" y2="3"></line>
+              <line x1="20" y1="21" x2="20" y2="16"></line>
+              <line x1="20" y1="12" x2="20" y2="3"></line>
+              <line x1="1" y1="14" x2="7" y2="14"></line>
+              <line x1="9" y1="8" x2="15" y2="8"></line>
+              <line x1="17" y1="16" x2="23" y2="16"></line>
+            </svg>
+            <span>Controls</span>
+          </h2>
+        </div>
+
+        <div class="controls-grid">
+          <!-- Refusal Slider -->
+          <div class="flow-slider-group" data-slider="refusal">
+            <div class="flow-slider-header">
+              <span class="flow-slider-title">Refusal Strength (&alpha;<sub>refusal</sub>)</span>
+              <div class="flow-slider-meta">
+                <span class="flow-slider-range-hint">-5 &rarr; +5</span>
+                <span class="flow-slider-badge flow-slider-badge--refusal">
+                  <span class="number-flow" id="refusalValue">0.0</span>
+                </span>
+              </div>
+            </div>
+            <div class="flow-slider flow-slider--refusal" id="sliderWrapRefusal">
+              <div class="flow-slider__track">
+                <div class="flow-slider__range flow-slider__range--refusal" id="rangeRefusal"></div>
+              </div>
+              <div class="flow-slider__thumb-wrap" id="thumbRefusal">
+                <div class="flow-slider__thumb"></div>
+              </div>
+              <input type="range" id="sliderRefusal" class="flow-slider__input"
+                     min="-5" max="5" step="0.1" value="0" />
+            </div>
+          </div>
+
+          <!-- Sycophancy Slider -->
+          <div class="flow-slider-group" data-slider="sycophancy">
+            <div class="flow-slider-header">
+              <span class="flow-slider-title">Sycophancy (&alpha;<sub>syco</sub>)</span>
+              <div class="flow-slider-meta">
+                <span class="flow-slider-range-hint">-5 &rarr; +5</span>
+                <span class="flow-slider-badge flow-slider-badge--sycophancy">
+                  <span class="number-flow" id="sycophancyValue">0.0</span>
+                </span>
+              </div>
+            </div>
+            <div class="flow-slider flow-slider--sycophancy" id="sliderWrapSycophancy">
+              <div class="flow-slider__track">
+                <div class="flow-slider__range flow-slider__range--sycophancy" id="rangeSycophancy"></div>
+              </div>
+              <div class="flow-slider__thumb-wrap" id="thumbSycophancy">
+                <div class="flow-slider__thumb"></div>
+              </div>
+              <input type="range" id="sliderSycophancy" class="flow-slider__input"
+                     min="-5" max="5" step="0.1" value="0" />
+            </div>
+          </div>
+
+          <!-- Layer Slider -->
+          <div class="flow-slider-group" data-slider="layer">
+            <div class="flow-slider-header">
+              <span class="flow-slider-title">Injection Layer (&ell;)</span>
+              <div class="flow-slider-meta">
+                <span class="flow-slider-range-hint">0 &rarr; 31</span>
+                <span class="flow-slider-badge flow-slider-badge--layer">
+                  <span class="number-flow" id="layerValue">12</span>
+                </span>
+              </div>
+            </div>
+            <div class="flow-slider flow-slider--layer" id="sliderWrapLayer">
+              <div class="flow-slider__track">
+                <div class="flow-slider__range flow-slider__range--layer" id="rangeLayer"></div>
+              </div>
+              <div class="flow-slider__thumb-wrap" id="thumbLayer">
+                <div class="flow-slider__thumb"></div>
+              </div>
+              <input type="range" id="sliderLayer" class="flow-slider__input"
+                     min="0" max="31" step="1" value="12" />
+            </div>
+          </div>
+
+          <!-- Model Architecture Dropdown -->
+          <div class="flow-slider-group flow-slider-group--model">
+            <div class="flow-slider-header">
+              <span class="flow-slider-title">Model Architecture</span>
+              <div class="flow-slider-meta">
+                <span class="flow-slider-range-hint">Active LLM</span>
+              </div>
+            </div>
+            <input type="hidden" id="modelSelect" value="qwen-3b" />
+            <div class="animated-dropdown" id="modelDropdown" data-state="closed">
+              <button type="button" class="animated-dropdown__trigger" id="modelDropdownBtn" aria-haspopup="listbox" aria-expanded="false">
+                <span class="animated-dropdown__selected" id="selectedModelLabel">Qwen2.5-3B-abliterated</span>
+                <svg class="animated-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m6 9 6 6 6-6"/>
+                </svg>
+              </button>
+              <div class="animated-dropdown__menu" id="modelDropdownMenu" role="listbox">
+                <button type="button" class="animated-dropdown__item active" data-id="qwen-3b">
+                  <span class="animated-dropdown__item-name">Qwen2.5-3B-abliterated</span>
+                  <span class="animated-dropdown__item-tag">3B &bull; Fast</span>
+                </button>
+                <button type="button" class="animated-dropdown__item" data-id="llama-3b">
+                  <span class="animated-dropdown__item-name">Llama-3.2-3B-abliterated</span>
+                  <span class="animated-dropdown__item-tag">3B &bull; Balanced</span>
+                </button>
+                <button type="button" class="animated-dropdown__item" data-id="qwen-27b">
+                  <span class="animated-dropdown__item-name">Qwen-2.5-27B-abliterated</span>
+                  <span class="animated-dropdown__item-tag">27B &bull; Cloud</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Plots with Cursor Illumination -->
+      <div class="plots-row">
+        <div class="plot-card cursor-card" data-trait="pca">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__bg" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <h3 class="card-title card-title--sm">
+            <span class="plot-card__dot plot-card__dot--cyan"></span>
+            <span>Real-time 2D PCA</span>
+          </h3>
+          <div id="plotPCA" class="plot-container"></div>
+        </div>
+        <div class="plot-card cursor-card" data-trait="umap">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__bg" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <h3 class="card-title card-title--sm">
+            <span class="plot-card__dot plot-card__dot--purple"></span>
+            <span>3D UMAP Manifold</span>
+          </h3>
+          <div id="plotUMAP" class="plot-container"></div>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=5021" defer></script>
+</body>
+</html>
