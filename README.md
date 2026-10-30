@@ -14,7 +14,7 @@ Install the Python dependencies with [uv](https://docs.astral.sh/uv/):
 ```sh
 uv sync
 ```
-
+![alt text]({./assets/screenshot.png)
 The project is configured to install PyTorch from the CUDA 12.8 wheel index.
 Before running the activation script, create a `.env` file containing
 an `HF_TOKEN` with access to the required Hugging Face model:

@@ -171,6 +171,7 @@ class MLRuntime:
         self._last_point = None
         self._fit_pca()
         self._umap_data = self._build_umap()
+        self._refusal_pca = PCA(n_components=2).fit(self._refusal_activations)
         self._refusal_pca_data = self._build_static_pca(
             self._refusal_activations, self._refusal_labels)
         self._refusal_umap_data = self._build_static_umap(
@@ -282,8 +283,13 @@ class MLRuntime:
                 self.model, self.tokenizer, prompt, layer)
             self._live_activations.append(prompt_activation.numpy())
             self._fit_pca()
-            point = self._pca.transform(prompt_activation.numpy().reshape(1, -1))[0]
-            self._last_point = {"x": float(point[0]), "y": float(point[1])}
+            activation = prompt_activation.numpy().reshape(1, -1)
+            point = self._pca.transform(activation)[0]
+            refusal_point = self._refusal_pca.transform(activation)[0]
+            self._last_point = {
+                "sycophancy": {"x": float(point[0]), "y": float(point[1])},
+                "refusal": {"x": float(refusal_point[0]), "y": float(refusal_point[1])},
+            }
             pca = self.pca_data()
         return self._last_point, pca
 
@@ -432,11 +438,20 @@ def api_project():
 
     if MOCK_MODE:
         point = _mock_project_prompt(prompt, alpha_r, alpha_s, layer)
-        return jsonify({"prompt_point": point, "mock": True})
+        return jsonify({
+            "prompt_point": point,
+            "prompt_points": {"sycophancy": point, "refusal": point},
+            "mock": True,
+        })
 
     try:
         point, pca = ML_RUNTIME.project_prompt(prompt, layer)
-        return jsonify({"prompt_point": point, "pca": pca, "mock": False})
+        return jsonify({
+            "prompt_points": point,
+            "prompt_point": point["sycophancy"],
+            "pca": pca,
+            "mock": False,
+        })
     except Exception as exc:
         app.logger.exception("Live prompt projection failed")
         return jsonify({"error": str(exc)}), 500

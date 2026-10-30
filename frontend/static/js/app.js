@@ -40,8 +40,8 @@ const layerValue       = $("#layerValue");
 // ── State ────────────────────────────────────────────────────────
 let currentLayer    = 13;
 let pcaBackground   = null;
-let currentBasePoint = null;
-let currentPoint    = null;
+let refusalPcaBackground = null;
+let currentPoints   = { sycophancy: null, refusal: null };
 let lastUmapData    = null;
 let umapRotationRAF = null;
 let isBusy          = false;
@@ -430,15 +430,16 @@ async function runAnimation(prompt) {
     }
 
   // Update PCA
-  if (projData.pca) {
+  if (projData && projData.pca) {
     pcaBackground = projData.pca;
     pcaCache.set(currentLayer, projData.pca);
   }
-  if (projData.prompt_point) {
-    currentBasePoint = projData.prompt_point;
-  }
-  if (projData.prompt_point && pcaBackground) {
-    plotPCAWithPoint(pcaBackground, projData.prompt_point);
+  if (projData && projData.prompt_points) {
+    currentPoints = projData.prompt_points;
+    renderCurrentPromptPoints();
+  } else if (projData && projData.prompt_point) {
+    currentPoints = { sycophancy: projData.prompt_point, refusal: projData.prompt_point };
+    renderCurrentPromptPoints();
   }
 
     const unsteeredLen = parseTokensWithHeatmap(unsteeredData).length;
@@ -767,16 +768,16 @@ function setupFlowSlider(opts) {
 // Form & slider wiring
 
 function updatePCAWithSliders() {
-  if (!currentBasePoint || !pcaBackground) return;
-  const valR = parseFloat(sliderRefusal.value) || 0;
-  const valS = parseFloat(sliderSycophancy.value) || 0;
-  const layer = parseInt(sliderLayer.value, 10) || 12;
-  const layerFactor = Math.max(0.3, Math.min(1.2, 1.0 - Math.abs(layer - 14) / 24.0));
-  const newPoint = {
-    x: Number((currentBasePoint.x - (valR * 0.75 - valS * 0.55) * layerFactor).toFixed(4)),
-    y: Number((currentBasePoint.y + (valR * 0.45 - valS * 0.40) * layerFactor).toFixed(4)),
-  };
-  plotPCAWithPoint(pcaBackground, newPoint);
+  // Steering controls affect generation only, not recorded PCA coordinates.
+}
+
+function renderCurrentPromptPoints() {
+  if (pcaBackground) {
+    plotPCAWithPoint(pcaBackground, currentPoints.sycophancy);
+  }
+  if (refusalPcaBackground) {
+    plotRefusalPCA(refusalPcaBackground, currentPoints.refusal);
+  }
 }
 
 // Slider bindings
@@ -788,7 +789,6 @@ setupFlowSlider({
   displayEl: refusalValue,
   bipolar: true,
   formatFn: (v) => (v > 0 ? "+" : "") + v.toFixed(1),
-  onChange: () => updatePCAWithSliders(),
 });
 
 setupFlowSlider({
@@ -799,7 +799,6 @@ setupFlowSlider({
   displayEl: sycophancyValue,
   bipolar: true,
   formatFn: (v) => (v > 0 ? "+" : "") + v.toFixed(1),
-  onChange: () => updatePCAWithSliders(),
 });
 
 setupFlowSlider({
@@ -882,7 +881,8 @@ async function loadPCA(layer) {
   if (pcaCache.has(layer)) {
     const data = pcaCache.get(layer);
     pcaBackground = data;
-    plotPCAWithPoint(data, currentPoint);
+    renderCurrentPromptPoints();
+    if (!currentPoints.sycophancy) plotPCAWithPoint(data, null);
     return;
   }
 
@@ -898,7 +898,8 @@ async function loadPCA(layer) {
     pcaCache.set(layer, data);
     if (layer === currentLayer) {
       pcaBackground = data;
-      plotPCAWithPoint(data, currentPoint);
+      renderCurrentPromptPoints();
+      if (!currentPoints.sycophancy) plotPCAWithPoint(data, null);
     }
   } catch (err) {
     if (err.name !== "AbortError") {
@@ -914,7 +915,6 @@ function plotPCAWithPoint(
   positiveName = "Sycophantic",
   negativeName = "Non-Sycophantic",
 ) {
-  if (targetId === "plotPCA") currentPoint = point;
   const pt = getPlotlyTheme();
   const traces = [
     {
@@ -945,8 +945,8 @@ function plotPCAWithPoint(
   }, PLOTLY_CFG);
 }
 
-function plotRefusalPCA(data) {
-  plotPCAWithPoint(data, null, "plotRefusalPCA", "Refusal", "Non-Refusal");
+function plotRefusalPCA(data, point) {
+  plotPCAWithPoint(data, point, "plotRefusalPCA", "Refusal", "Non-Refusal");
 }
 
 // UMAP
@@ -987,6 +987,7 @@ function plotUMAP(
 ) {
   if (targetId === "plotUMAP") lastUmapData = data;
   const pt = getPlotlyTheme();
+  const axisColor = pt.isLight ? "#000000" : pt.text;
   Plotly.react(targetId, [
     {
       x: data.sycophantic.x, y: data.sycophantic.y, z: data.sycophantic.z,
@@ -1003,9 +1004,9 @@ function plotUMAP(
     margin: { t: 10, r: 0, b: 0, l: 0 },
     scene: {
       bgcolor: pt.bg,
-      xaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
-      yaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
-      zaxis: { gridcolor: pt.grid, zerolinecolor: pt.grid, title: "", showticklabels: false, showbackground: false },
+      xaxis: { gridcolor: pt.grid, zerolinecolor: axisColor, linecolor: axisColor, title: "", showticklabels: false, showbackground: false },
+      yaxis: { gridcolor: pt.grid, zerolinecolor: axisColor, linecolor: axisColor, title: "", showticklabels: false, showbackground: false },
+      zaxis: { gridcolor: pt.grid, zerolinecolor: axisColor, linecolor: axisColor, title: "", showticklabels: false, showbackground: false },
       camera: { eye: { x: 1.6, y: 1.6, z: 1.0 } },
     },
     legend: { x: 0, y: 1, bgcolor: "rgba(0,0,0,0)", font: { size: 10, color: pt.text } },
@@ -1018,14 +1019,24 @@ function plotRefusalUMAP(data) {
 }
 
 async function loadRefusalPlots(layer) {
-  const [pcaResponse, umapResponse] = await Promise.all([
-    fetch(`/api/pca?layer=${layer}&dataset=refusal`),
-    fetch(`/api/umap?layer=${layer}&dataset=refusal`),
-  ]);
-  if (!pcaResponse.ok || !umapResponse.ok) return;
-  const [pca, umap] = await Promise.all([pcaResponse.json(), umapResponse.json()]);
-  plotRefusalPCA(pca);
-  plotRefusalUMAP(umap);
+  try {
+    const [pcaResponse, umapResponse] = await Promise.all([
+      fetch(`/api/pca?layer=${layer}&dataset=refusal`),
+      fetch(`/api/umap?layer=${layer}&dataset=refusal`),
+    ]);
+    if (!pcaResponse.ok || !umapResponse.ok) {
+      throw new Error(`HTTP ${pcaResponse.status}/${umapResponse.status}`);
+    }
+    const [pca, umap] = await Promise.all([
+      pcaResponse.json(),
+      umapResponse.json(),
+    ]);
+    refusalPcaBackground = pca;
+    plotRefusalPCA(pca, currentPoints.refusal);
+    plotRefusalUMAP(umap);
+  } catch (err) {
+    console.warn("Refusal plot load failed:", err);
+  }
 }
 
 let umapAngle = 0;
@@ -1586,9 +1597,7 @@ function initThemeToggle() {
     } catch (e) {}
 
     // Refresh Plotly graphs with theme colors
-    if (pcaBackground) {
-      plotPCAWithPoint(pcaBackground, currentPoint);
-    }
+    renderCurrentPromptPoints();
     if (lastUmapData) {
       plotUMAP(lastUmapData);
     }
