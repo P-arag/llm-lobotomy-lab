@@ -12,7 +12,8 @@ Outputs (in backend/ml/out/):
     {ds}_layer{L}_activations.pt   {"acts": [N,d] float32, "labels": [N] bool, "layer", "position"}
     {ds}_layer{L}_direction.pt     {"direction": [d] float32, "layer", "position"}
 
-Where `ds` is either "sycophancy" or "refusal".
+Where `ds` is either "sycophancy" or "refusal". `--steering` is an alias for
+`--dataset`, making it convenient to select the direction used for steering.
 """
 
 import argparse
@@ -23,6 +24,7 @@ import numpy as np
 import torch
 from dotenv import load_dotenv
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from tqdm import tqdm
 
 load_dotenv()
 
@@ -35,7 +37,7 @@ OUT_DIR = os.path.join(HERE, "out")
 # `answer_not_matching_behavior`.
 SUPPORTED_DATASETS = ("sycophancy", "refusal")
 
-N_PER_CLASS = 800  # number of matching / non-matching examples to collect
+N_PER_CLASS = 1600  # number of matching / non-matching examples to collect
 POSITION = -2      # second-to-last token
 
 HF_TOKEN = os.getenv("HF_TOKEN")
@@ -91,10 +93,9 @@ def record_activations(model, tokenizer, layer, data_path,
         data = json.load(f)
 
     pos_acts, neg_acts = [], []
-    for item in data:
+    for item in tqdm(data, desc="Processing data"):
         pos_acts.append(activation_for(item["question"], item["answer_matching_behavior"]))
         neg_acts.append(activation_for(item["question"], item["answer_not_matching_behavior"]))
-        print(f"collected {len(pos_acts)} pairs", flush=True)
         if len(pos_acts) >= n_per_class and len(neg_acts) >= n_per_class:
             break
 
@@ -142,28 +143,35 @@ def score_prompt(model, tokenizer, direction, layer, prompt, position=POSITION):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--dataset", required=True, choices=SUPPORTED_DATASETS,
+    dataset_group = ap.add_mutually_exclusive_group()
+    dataset_group.add_argument("--dataset", choices=SUPPORTED_DATASETS,
                     help="which A/B dataset to record activations for")
+    dataset_group.add_argument("--steering", choices=SUPPORTED_DATASETS,
+                    help="steering behavior to record (alias for --dataset)")
     ap.add_argument("--layer", type=int, default=13)
     args = ap.parse_args()
+
+    dataset = args.dataset or args.steering
+    if dataset is None:
+        ap.error("one of --dataset or --steering is required")
 
     os.makedirs(OUT_DIR, exist_ok=True)
     model, tokenizer = load_model()
 
-    data_path = dataset_path(args.dataset)
+    data_path = dataset_path(dataset)
     acts, labels = record_activations(model, tokenizer, args.layer, data_path)
-    print(f"activations: {tuple(acts.shape)} (dataset={args.dataset}, layer {args.layer})")
+    print(f"activations: {tuple(acts.shape)} (dataset={dataset}, layer {args.layer})")
 
     direction = difference_of_means(acts, labels)
     print(f"direction norm: {direction.norm().item():.3f}")
 
-    act_path = os.path.join(OUT_DIR, f"{args.dataset}_layer{args.layer}_activations.pt")
-    dir_path = os.path.join(OUT_DIR, f"{args.dataset}_layer{args.layer}_direction.pt")
+    act_path = os.path.join(OUT_DIR, f"{dataset}_layer{args.layer}_activations.pt")
+    dir_path = os.path.join(OUT_DIR, f"{dataset}_layer{args.layer}_direction.pt")
     torch.save({"acts": acts, "labels": labels, "layer": args.layer,
-                "position": POSITION, "model": MODEL_ID, "dataset": args.dataset},
+                "position": POSITION, "model": MODEL_ID, "dataset": dataset},
                act_path)
     torch.save({"direction": direction, "layer": args.layer,
-                "position": POSITION, "model": MODEL_ID, "dataset": args.dataset},
+                "position": POSITION, "model": MODEL_ID, "dataset": dataset},
                dir_path)
     print(f"saved {act_path}")
     print(f"saved {dir_path}")

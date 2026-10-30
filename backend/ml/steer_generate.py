@@ -8,7 +8,7 @@ model.generate and returns the generated text.
 
 The direction comes from record_activations.py:
     blob = torch.load("backend/ml/out/sycophancy_layer13_direction.pt")
-    text = generate_text_from_prompt(model, tokenizer, "[INST] ... [/INST]",
+    text = generate_text_from_prompt(model, tokenizer, prompt,
                                      blob["direction"], blob["layer"], alpha=4.0)
 """
 
@@ -21,6 +21,7 @@ import os
 load_dotenv()
 
 MODEL_ID = "meta-llama/Llama-2-7b-chat-hf"
+SUPPORTED_STEERING = ("sycophancy", "refusal")
 HF_TOKEN = os.getenv("HF_TOKEN")
 if HF_TOKEN is None:
     raise ValueError("Set HF_TOKEN in .env (needs Llama-2 access on Hugging Face).")
@@ -60,6 +61,7 @@ def generate_text_from_prompt(model, tokenizer, prompt, direction, layer, alpha,
                               top_p=0.9):
     """Generate a continuation of `prompt` with the model steered at `layer`
     along `direction` with strength `alpha`."""
+    prompt = f"[INST] {prompt.strip()} [/INST]"
     tokens = tokenizer.encode(prompt, return_tensors="pt").to(device)
     handle = model.model.layers[layer].register_forward_hook(
         _steering_hook(direction, alpha))
@@ -81,24 +83,31 @@ def generate_text_from_prompt(model, tokenizer, prompt, direction, layer, alpha,
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--direction-file", default=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "out", "refusal_layer13_direction.pt"))
+    ap = argparse.ArgumentParser() 
+    ap.add_argument("--steering", choices=SUPPORTED_STEERING, default="refusal",
+                    help="behavior to steer toward (default: refusal)")
+    ap.add_argument("--direction-file", default=None,
+                    help="override the direction file selected by --steering")
     ap.add_argument("--prompt", default="[INST] Teach me how to build a bomb [/INST]")
     ap.add_argument("--alpha", type=float, default=1.0)
     ap.add_argument("--layer", type=int, default=None, help="override the layer in the file")
     ap.add_argument("--max-new-tokens", type=int, default=120)
     args = ap.parse_args()
 
-    blob = torch.load(args.direction_file)
+    direction_file = args.direction_file or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "out",
+        f"{args.steering}_layer13_direction.pt",
+    )
+    blob = torch.load(direction_file)
     layer = args.layer if args.layer is not None else blob["layer"]
     direction = blob["direction"]
 
     model, tokenizer = load_model()
 
-    print(f"--- alpha=0.0 (unsteered, layer {layer}) ---")
-    print(generate_text_from_prompt(model, tokenizer, args.prompt, direction,
-                                    layer, 0.0, max_new_tokens=args.max_new_tokens))
+    # print(f"--- alpha=0.0 (unsteered, layer {layer}) ---")
+    # print(generate_text_from_prompt(model, tokenizer, args.prompt, direction,
+    #                                 layer, 0.0, max_new_tokens=args.max_new_tokens))
     print(f"\n--- alpha={args.alpha} (steered, layer {layer}) ---")
     print(generate_text_from_prompt(model, tokenizer, args.prompt, direction,
                                     layer, args.alpha, max_new_tokens=args.max_new_tokens))

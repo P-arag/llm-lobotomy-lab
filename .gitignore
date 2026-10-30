@@ -22,6 +22,7 @@ outputs/
 logs/
 *.ckpt
 *.pt
+!*direction.pt
 *.pth
 *.onnx
 
