@@ -43,10 +43,9 @@ const sliderLayer      = $("#sliderLayer");
 const refusalValue     = $("#refusalValue");
 const sycophancyValue  = $("#sycophancyValue");
 const layerValue       = $("#layerValue");
-const modelSelect      = $("#modelSelect");
 
 // ── State ────────────────────────────────────────────────────────
-let currentLayer    = 12;
+let currentLayer    = 13;
 let pcaBackground   = null;
 let currentPoint    = null;
 let lastUmapData    = null;
@@ -187,7 +186,7 @@ function createOrbRenderer(canvas, opts = {}) {
 //  ANIMATION ORCHESTRATOR
 // ══════════════════════════════════════════════════════════════════
 
-const LABELS = ["Thinking", "Searching", "Analyzing", "Composing"];
+const LABELS = ["Thinking"];
 
 // Easing
 const easeOut   = (t) => 1 - Math.pow(1 - t, 3);
@@ -287,7 +286,6 @@ async function runAnimation(prompt) {
     alpha_refusal:    parseFloat(sliderRefusal.value),
     alpha_sycophancy: parseFloat(sliderSycophancy.value),
     layer:            parseInt(sliderLayer.value, 10),
-    model:            modelSelect.value,
   };
 
   const apiPromise = Promise.all([
@@ -442,6 +440,10 @@ async function runAnimation(prompt) {
   }
 
   // Update PCA
+  if (projData.pca) {
+    pcaBackground = projData.pca;
+    pcaCache.set(currentLayer, projData.pca);
+  }
   if (projData.prompt_point && pcaBackground) {
     plotPCAWithPoint(pcaBackground, projData.prompt_point);
   }
@@ -823,59 +825,6 @@ setupFlowSlider({
     }, 75);
   },
 });
-
-// ── Animated Model Dropdown (Emerald UI inspired) ───────────────
-const modelDropdown = $("#modelDropdown");
-const modelDropdownBtn = $("#modelDropdownBtn");
-const selectedModelLabel = $("#selectedModelLabel");
-const modelItems = $$(".animated-dropdown__item");
-const controlsCard = $(".controls-card");
-
-if (modelDropdown && modelDropdownBtn) {
-  modelDropdownBtn.addEventListener("click", (e) => {
-    e.stopPropagation();
-    const isOpen = modelDropdown.getAttribute("data-state") === "open";
-    const nextState = isOpen ? "closed" : "open";
-    modelDropdown.setAttribute("data-state", nextState);
-    modelDropdownBtn.setAttribute("aria-expanded", String(!isOpen));
-    if (controlsCard) {
-      controlsCard.classList.toggle("dropdown-open", !isOpen);
-    }
-  });
-
-  modelItems.forEach((item) => {
-    item.addEventListener("click", () => {
-      const id = item.getAttribute("data-id");
-      const name = item.querySelector(".animated-dropdown__item-name").textContent;
-
-      // Update hidden input for API compatibility
-      modelSelect.value = id;
-      selectedModelLabel.textContent = name;
-
-      // Update active state
-      modelItems.forEach((btn) => btn.classList.remove("active"));
-      item.classList.add("active");
-
-      // Close menu
-      modelDropdown.setAttribute("data-state", "closed");
-      modelDropdownBtn.setAttribute("aria-expanded", "false");
-      if (controlsCard) {
-        controlsCard.classList.remove("dropdown-open");
-      }
-    });
-  });
-
-  // Click outside to close
-  document.addEventListener("click", (e) => {
-    if (!modelDropdown.contains(e.target)) {
-      modelDropdown.setAttribute("data-state", "closed");
-      modelDropdownBtn.setAttribute("aria-expanded", "false");
-      if (controlsCard) {
-        controlsCard.classList.remove("dropdown-open");
-      }
-    }
-  });
-}
 
 // Send button data-ready attribute
 promptInput.addEventListener("input", () => {

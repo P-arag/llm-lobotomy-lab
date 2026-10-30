@@ -1,4 +1,6 @@
 """
+LEGACY: This script is no longer used in the current LLM Lobotomy Lab. 
+
 Standalone script: records layer-13 residual-stream activations of Llama-2-7b-chat
 on the sycophancy A/B dataset, then plots PCA (2 components) and UMAP (2 and 3
 components) of sycophantic vs non-sycophantic activations.

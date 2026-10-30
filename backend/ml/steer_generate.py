@@ -23,13 +23,13 @@ load_dotenv()
 MODEL_ID = "meta-llama/Llama-2-7b-chat-hf"
 SUPPORTED_STEERING = ("sycophancy", "refusal")
 HF_TOKEN = os.getenv("HF_TOKEN")
-if HF_TOKEN is None:
-    raise ValueError("Set HF_TOKEN in .env (needs Llama-2 access on Hugging Face).")
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def load_model():
+    if HF_TOKEN is None:
+        raise ValueError("Set HF_TOKEN in .env (needs Llama-2 access on Hugging Face).")
     # 4-bit NF4 quantization: same setup as the other backend/ml scripts (8 GB GPU).
     tokenizer = AutoTokenizer.from_pretrained(MODEL_ID, token=HF_TOKEN)
     bnb_config = BitsAndBytesConfig(
@@ -42,6 +42,37 @@ def load_model():
     )
     model.eval()
     return model, tokenizer
+
+
+def load_direction(steering, layer=13, direction_file=None):
+    """Load a recorded direction for a supported steering behavior."""
+    if steering not in SUPPORTED_STEERING:
+        raise ValueError(f"steering must be one of {SUPPORTED_STEERING}, got {steering!r}")
+    path = direction_file or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "out",
+        f"{steering}_layer{layer}_direction.pt",
+    )
+    return torch.load(path, map_location="cpu", weights_only=True)
+
+
+def capture_prompt_activation(model, tokenizer, prompt, layer):
+    """Capture the final prompt-token activation at `layer` without generating."""
+    captured = []
+
+    def hook(module, inputs, output):
+        hidden = output[0] if isinstance(output, tuple) else output
+        captured.append(hidden[0, -1].detach().float().cpu())
+
+    handle = model.model.layers[layer].register_forward_hook(hook)
+    try:
+        formatted_prompt = f"[INST] {prompt.strip()} [/INST]"
+        tokens = tokenizer.encode(formatted_prompt, return_tensors="pt").to(device)
+        with torch.no_grad():
+            model(tokens)
+    finally:
+        handle.remove()
+    return captured[0]
 
 
 def _steering_hook(direction, alpha):
@@ -83,7 +114,7 @@ def generate_text_from_prompt(model, tokenizer, prompt, direction, layer, alpha,
 if __name__ == "__main__":
     import argparse
 
-    ap = argparse.ArgumentParser() 
+    ap = argparse.ArgumentParser()
     ap.add_argument("--steering", choices=SUPPORTED_STEERING, default="refusal",
                     help="behavior to steer toward (default: refusal)")
     ap.add_argument("--direction-file", default=None,
@@ -99,7 +130,7 @@ if __name__ == "__main__":
         "out",
         f"{args.steering}_layer13_direction.pt",
     )
-    blob = torch.load(direction_file)
+    blob = torch.load(direction_file, map_location="cpu", weights_only=True)
     layer = args.layer if args.layer is not None else blob["layer"]
     direction = blob["direction"]
 

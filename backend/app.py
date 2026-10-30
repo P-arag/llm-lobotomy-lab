@@ -2,21 +2,26 @@
 Flask backend for LLM Lobotomy Lab.
 
 Serves the frontend and exposes API endpoints for generation, steering,
-and activation visualization.  Starts in **mock mode** by default so the
-frontend can be developed without a GPU or model weights.
+and activation visualization. Use `--mock` for frontend-only development.
 
 Run from the repo root:
     uv run python backend/app.py
-    uv run python backend/app.py --mock   # explicit mock mode (default)
+    uv run python backend/app.py --mock   # frontend-only mock mode
 """
 
 import argparse
-import math
+import os
 import random
+import threading
 import time
 
 import numpy as np
+import torch
 from flask import Flask, jsonify, render_template, request
+from sklearn.decomposition import PCA
+from umap import UMAP
+
+from ml import steer_generate
 
 # ---------------------------------------------------------------------------
 # Flask app – templates and static assets live under ../frontend/
@@ -27,8 +32,10 @@ app = Flask(
     static_folder="../frontend/static",
 )
 
-# Will be set to True unless a real model backend is wired up.
+# Mock mode remains available for frontend-only development.
 MOCK_MODE = True
+ML_RUNTIME = None
+DEFAULT_LAYER = 13
 
 # ---------------------------------------------------------------------------
 # Preset prompts for quick one-click booth demos
@@ -146,6 +153,131 @@ def _mock_project_prompt(prompt: str, alpha_refusal: float,
     return {"x": round(x, 4), "y": round(y, 4)}
 
 
+class MLRuntime:
+    """Owns the single model instance and the live visualization state."""
+
+    def __init__(self, layer=DEFAULT_LAYER, sample_size=100):
+        self.layer = layer
+        self.sample_size = sample_size
+        self.model, self.tokenizer = steer_generate.load_model()
+        self.refusal_direction = steer_generate.load_direction("refusal")
+        self.sycophancy_direction = steer_generate.load_direction("sycophancy")
+        self._lock = threading.RLock()
+        self._pca_activations, self._pca_labels = self._load_initial_activations()
+        self._live_activations = []
+        self._pca = None
+        self._pca_points = None
+        self._last_point = None
+        self._fit_pca()
+        self._umap_data = self._build_umap()
+
+    @property
+    def model_name(self):
+        return steer_generate.MODEL_ID
+
+    def _load_initial_activations(self):
+        path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "ml", "out", "sycophancy_layer13_activations.pt",
+        )
+        blob = torch.load(path, map_location="cpu", weights_only=True)
+        acts = blob["acts"].numpy()
+        labels = blob["labels"].numpy().astype(bool)
+        rng = np.random.default_rng(42)
+        selected = np.concatenate([
+            rng.choice(np.flatnonzero(labels), min(self.sample_size, labels.sum()), replace=False),
+            rng.choice(np.flatnonzero(~labels), min(self.sample_size, (~labels).sum()), replace=False),
+        ])
+        return acts[selected], labels[selected]
+
+    def _fit_pca(self):
+        self._pca = PCA(n_components=2)
+        all_activations = np.vstack([self._pca_activations, *self._live_activations])
+        points = self._pca.fit_transform(all_activations)
+        base_points = points[:len(self._pca_activations)]
+        self._pca_points = {
+            "sycophantic": base_points[self._pca_labels].tolist(),
+            "non_sycophantic": base_points[~self._pca_labels].tolist(),
+        }
+
+    def _build_umap(self):
+        reducer = UMAP(n_components=3, random_state=42)
+        points = reducer.fit_transform(self._pca_activations)
+        return {
+            "layer": self.layer,
+            "sycophantic": {
+                "x": points[self._pca_labels, 0].tolist(),
+                "y": points[self._pca_labels, 1].tolist(),
+                "z": points[self._pca_labels, 2].tolist(),
+            },
+            "non_sycophantic": {
+                "x": points[~self._pca_labels, 0].tolist(),
+                "y": points[~self._pca_labels, 1].tolist(),
+                "z": points[~self._pca_labels, 2].tolist(),
+            },
+        }
+
+    def generate(self, prompt, alpha_refusal, alpha_sycophancy, layer):
+        with self._lock:
+            steered_direction = (
+                alpha_refusal * self.refusal_direction["direction"]
+                + alpha_sycophancy * self.sycophancy_direction["direction"]
+            )
+            unsteered = steer_generate.generate_text_from_prompt(
+                self.model, self.tokenizer, prompt, steered_direction,
+                layer, 0.0)
+            steered = steer_generate.generate_text_from_prompt(
+                self.model, self.tokenizer, prompt, steered_direction,
+                layer, 1.0)
+
+        return {
+            "unsteered": {"text": unsteered, "tokens": _tokenize_response(unsteered, False)},
+            "steered": {"text": steered, "tokens": _tokenize_response(steered, True)},
+            "params": {
+                "alpha_refusal": alpha_refusal,
+                "alpha_sycophancy": alpha_sycophancy,
+                "layer": layer,
+                "model": self.model_name,
+            },
+        }
+
+    def project_prompt(self, prompt, layer):
+        with self._lock:
+            prompt_activation = steer_generate.capture_prompt_activation(
+                self.model, self.tokenizer, prompt, layer)
+            self._live_activations.append(prompt_activation.numpy())
+            self._fit_pca()
+            point = self._pca.transform(prompt_activation.numpy().reshape(1, -1))[0]
+            self._last_point = {"x": float(point[0]), "y": float(point[1])}
+            pca = self.pca_data()
+        return self._last_point, pca
+
+    def pca_data(self):
+        with self._lock:
+            return {
+                "layer": self.layer,
+                "sycophantic": {
+                    "x": [point[0] for point in self._pca_points["sycophantic"]],
+                    "y": [point[1] for point in self._pca_points["sycophantic"]],
+                },
+                "non_sycophantic": {
+                    "x": [point[0] for point in self._pca_points["non_sycophantic"]],
+                    "y": [point[1] for point in self._pca_points["non_sycophantic"]],
+                },
+            }
+
+    def umap_data(self):
+        return self._umap_data
+
+    def last_point(self):
+        with self._lock:
+            return self._last_point
+
+
+def _tokenize_response(text, steered):
+    return _mock_tokens_with_heatmap(text, steered)
+
+
 # ---------------------------------------------------------------------------
 # Routes – Pages
 # ---------------------------------------------------------------------------
@@ -179,15 +311,21 @@ def api_generate():
     prompt = data.get("prompt", "")
     alpha_refusal = float(data.get("alpha_refusal", 0.0))
     alpha_sycophancy = float(data.get("alpha_sycophancy", 0.0))
-    layer = int(data.get("layer", 12))
+    layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
         result = _mock_generate(prompt, alpha_refusal, alpha_sycophancy, layer)
         result["mock"] = True
         return jsonify(result)
 
-    # TODO: wire up real model inference from ml/ module
-    return jsonify({"error": "Real inference not implemented yet"}), 501
+    try:
+        result = ML_RUNTIME.generate(
+            prompt, alpha_refusal, alpha_sycophancy, layer)
+        result["mock"] = False
+        return jsonify(result)
+    except Exception as exc:
+        app.logger.exception("Live generation failed")
+        return jsonify({"error": str(exc)}), 500
 
 
 @app.route("/api/umap", methods=["GET"])
@@ -195,15 +333,14 @@ def api_umap():
     """Return precomputed 3-D UMAP coordinates for a given layer.
 
     Query params:
-        layer (int, default 12)
+        layer (int, default 13)
     """
-    layer = int(request.args.get("layer", 12))
+    layer = int(request.args.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
         return jsonify(_mock_umap_data(layer))
 
-    # TODO: load precomputed UMAP from cache
-    return jsonify({"error": "Not implemented"}), 501
+    return jsonify(ML_RUNTIME.umap_data())
 
 
 @app.route("/api/pca", methods=["GET"])
@@ -211,14 +348,14 @@ def api_pca():
     """Return precomputed 2-D PCA background clusters.
 
     Query params:
-        layer (int, default 12)
+        layer (int, default 13)
     """
-    layer = int(request.args.get("layer", 12))
+    layer = int(request.args.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
         return jsonify(_mock_pca_data(layer))
 
-    return jsonify({"error": "Not implemented"}), 501
+    return jsonify(ML_RUNTIME.pca_data())
 
 
 @app.route("/api/project", methods=["POST"])
@@ -235,13 +372,18 @@ def api_project():
     prompt = data.get("prompt", "")
     alpha_r = float(data.get("alpha_refusal", 0.0))
     alpha_s = float(data.get("alpha_sycophancy", 0.0))
-    layer = int(data.get("layer", 12))
+    layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
         point = _mock_project_prompt(prompt, alpha_r, alpha_s, layer)
         return jsonify({"prompt_point": point, "mock": True})
 
-    return jsonify({"error": "Not implemented"}), 501
+    try:
+        point, pca = ML_RUNTIME.project_prompt(prompt, layer)
+        return jsonify({"prompt_point": point, "pca": pca, "mock": False})
+    except Exception as exc:
+        app.logger.exception("Live prompt projection failed")
+        return jsonify({"error": str(exc)}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +392,8 @@ def api_project():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LLM Lobotomy Lab backend")
-    parser.add_argument("--mock", action="store_true", default=True,
-                        help="Run with mock data (default: True)")
+    parser.add_argument("--mock", action="store_true", default=False,
+                        help="Run with mock data instead of loading the model")
     parser.add_argument("--no-mock", dest="mock", action="store_false",
                         help="Run with real model inference")
     parser.add_argument("--port", type=int, default=5000)
@@ -260,6 +402,10 @@ if __name__ == "__main__":
 
     MOCK_MODE = args.mock
     mode_label = "MOCK" if MOCK_MODE else "LIVE"
+    if not MOCK_MODE:
+        print("  loading model and activation projections...")
+        ML_RUNTIME = MLRuntime()
+        print("  model loaded")
     print(f"[LLM Lobotomy Lab] {mode_label} mode")
     print(f"  http://localhost:{args.port}")
-    app.run(host="0.0.0.0", port=args.port, debug=args.debug)
+    app.run(host="0.0.0.0", port=args.port, debug=args.debug, use_reloader=False)

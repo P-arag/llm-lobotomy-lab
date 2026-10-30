@@ -3,7 +3,7 @@ Plots the recorded activations: a rotating looping 3D UMAP GIF and a PCA (2
 component) scatter. Loads the .pt dumps written by record_activations.py,
 reusing the plotting approach from plot_sycophancy_pca_umap.py.
 
-Run from the repo root with the `fl` conda env:
+Run from the repo root with the `lobo-lab` conda env:
     python backend/ml/plot_activations.py [--activations-file backend/ml/out/layer13_activations.pt]
 
 Outputs (next to the .pt file):

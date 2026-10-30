@@ -121,7 +121,7 @@
           <div class="chat-panel__header chat-panel__header--normal">
             <span class="dot dot--red"></span>
             UNSTEERED
-            <span class="chat-panel__tag">raw abliterated</span>
+            <span class="chat-panel__tag">Llama-2</span>
           </div>
           <div class="chat-panel__body" id="chatNormal">
             <div class="chat-placeholder">Send a prompt to see the unsteered response&hellip;</div>
@@ -133,7 +133,7 @@
           <div class="chat-panel__header chat-panel__header--steered">
             <span class="dot dot--green"></span>
             STEERED
-            <span class="chat-panel__tag">CAA active</span>
+            <span class="chat-panel__tag">Llama-2 CAA</span>
           </div>
           <div class="chat-panel__body" id="chatSteered">
             <div class="chat-placeholder">Send a prompt to see the steered response&hellip;</div>
@@ -160,7 +160,7 @@
               <path d="M18 14.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8z"/>
             </svg>
             <input type="text" id="promptInput" class="prompt-pill__input"
-                   placeholder="Ask anything..." maxlength="300" spellcheck="false" />
+                   placeholder="I think we should only eat dessert for all meals. What do you think?" maxlength="300" spellcheck="false" />
             <button type="submit" class="prompt-pill__send" id="sendBtn" aria-label="Send">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -252,7 +252,7 @@
               <div class="flow-slider-meta">
                 <span class="flow-slider-range-hint">0 &rarr; 31</span>
                 <span class="flow-slider-badge flow-slider-badge--layer">
-                  <span class="number-flow" id="layerValue">12</span>
+                  <span class="number-flow" id="layerValue">13</span>
                 </span>
               </div>
             </div>
@@ -264,42 +264,10 @@
                 <div class="flow-slider__thumb"></div>
               </div>
               <input type="range" id="sliderLayer" class="flow-slider__input"
-                     min="0" max="31" step="1" value="12" />
+                     min="0" max="31" step="1" value="13" />
             </div>
           </div>
 
-          <!-- Model Architecture Dropdown -->
-          <div class="flow-slider-group flow-slider-group--model">
-            <div class="flow-slider-header">
-              <span class="flow-slider-title">Model Architecture</span>
-              <div class="flow-slider-meta">
-                <span class="flow-slider-range-hint">Active LLM</span>
-              </div>
-            </div>
-            <input type="hidden" id="modelSelect" value="qwen-3b" />
-            <div class="animated-dropdown" id="modelDropdown" data-state="closed">
-              <button type="button" class="animated-dropdown__trigger" id="modelDropdownBtn" aria-haspopup="listbox" aria-expanded="false">
-                <span class="animated-dropdown__selected" id="selectedModelLabel">Qwen2.5-3B-abliterated</span>
-                <svg class="animated-dropdown__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="m6 9 6 6 6-6"/>
-                </svg>
-              </button>
-              <div class="animated-dropdown__menu" id="modelDropdownMenu" role="listbox">
-                <button type="button" class="animated-dropdown__item active" data-id="qwen-3b">
-                  <span class="animated-dropdown__item-name">Qwen2.5-3B-abliterated</span>
-                  <span class="animated-dropdown__item-tag">3B &bull; Fast</span>
-                </button>
-                <button type="button" class="animated-dropdown__item" data-id="llama-3b">
-                  <span class="animated-dropdown__item-name">Llama-3.2-3B-abliterated</span>
-                  <span class="animated-dropdown__item-tag">3B &bull; Balanced</span>
-                </button>
-                <button type="button" class="animated-dropdown__item" data-id="qwen-27b">
-                  <span class="animated-dropdown__item-name">Qwen-2.5-27B-abliterated</span>
-                  <span class="animated-dropdown__item-tag">27B &bull; Cloud</span>
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
 

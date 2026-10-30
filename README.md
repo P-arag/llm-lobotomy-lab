@@ -5,8 +5,8 @@
 Create and activate the Conda environment:
 
 ```sh
-conda create --name llm-lobo python=3.11
-conda activate llm-lobo
+conda create --name lobo-lab python=3.11
+conda activate lobo-lab
 ```
 
 Install the Python dependencies with [uv](https://docs.astral.sh/uv/):
