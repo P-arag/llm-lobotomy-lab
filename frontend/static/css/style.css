@@ -1126,6 +1126,7 @@ body {
 .plots-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(2, minmax(0, 1fr));
   gap: 12px;
   flex: 1;
   min-height: 0;
@@ -1163,8 +1164,8 @@ body {
 }
 .plot-container {
   width: 100%;
-  height: 420px;
-  min-height: 360px;
+  height: auto;
+  min-height: 0;
   flex: 1;
   border-radius: var(--radius);
   contain: layout size;
@@ -1174,13 +1175,13 @@ body {
 
 @media (min-height: 850px) {
   .plot-container {
-    height: 480px;
+    height: auto;
   }
 }
 
 @media (min-height: 1020px) {
   .plot-container {
-    height: 540px;
+    height: auto;
   }
 }
 

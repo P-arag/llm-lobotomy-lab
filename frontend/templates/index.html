@@ -270,7 +270,7 @@
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--cyan"></span>
-            <span>2D PCA</span>
+            <span>Sycophancy PCA</span>
           </h3>
           <div id="plotPCA" class="plot-container"></div>
         </div>
@@ -279,9 +279,27 @@
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--purple"></span>
-            <span>3D UMAP</span>
+            <span>Sycophancy UMAP</span>
           </h3>
           <div id="plotUMAP" class="plot-container"></div>
+        </div>
+        <div class="plot-card cursor-card" data-trait="refusal-pca">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <h3 class="card-title card-title--sm">
+            <span class="plot-card__dot plot-card__dot--cyan"></span>
+            <span>Refusal PCA</span>
+          </h3>
+          <div id="plotRefusalPCA" class="plot-container"></div>
+        </div>
+        <div class="plot-card cursor-card" data-trait="refusal-umap">
+          <div class="cursor-card__border" aria-hidden="true"></div>
+          <div class="cursor-card__illumination" aria-hidden="true"></div>
+          <h3 class="card-title card-title--sm">
+            <span class="plot-card__dot plot-card__dot--purple"></span>
+            <span>Refusal UMAP</span>
+          </h3>
+          <div id="plotRefusalUMAP" class="plot-container"></div>
         </div>
       </div>
 
@@ -292,7 +310,7 @@
   <footer class="app-footer">
     <span>Bitskrieg Open Day 2026</span>
     <span class="app-footer__divider" aria-hidden="true">|</span>
-    <span>Developed by <span class="app-footer__author">Chaitanya Ahuja</span></span>
+    <span>Frontend developed by <span class="app-footer__author">Chaitanya Ahuja</span></span>
   </footer>
 
   <script src="{{ url_for('static', filename='js/app.js') }}?v=5026" defer></script>

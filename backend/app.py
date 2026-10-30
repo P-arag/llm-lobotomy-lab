@@ -164,21 +164,26 @@ class MLRuntime:
         self.sycophancy_direction = steer_generate.load_direction("sycophancy")
         self._lock = threading.RLock()
         self._pca_activations, self._pca_labels = self._load_initial_activations()
+        self._refusal_activations, self._refusal_labels = self._load_initial_activations("refusal")
         self._live_activations = []
         self._pca = None
         self._pca_points = None
         self._last_point = None
         self._fit_pca()
         self._umap_data = self._build_umap()
+        self._refusal_pca_data = self._build_static_pca(
+            self._refusal_activations, self._refusal_labels)
+        self._refusal_umap_data = self._build_static_umap(
+            self._refusal_activations, self._refusal_labels)
 
     @property
     def model_name(self):
         return steer_generate.MODEL_ID
 
-    def _load_initial_activations(self):
+    def _load_initial_activations(self, dataset="sycophancy"):
         path = os.path.join(
             os.path.dirname(os.path.abspath(__file__)),
-            "ml", "out", "sycophancy_layer13_activations.pt",
+            "ml", "out", f"{dataset}_layer13_activations.pt",
         )
         blob = torch.load(path, map_location="cpu", weights_only=True)
         acts = blob["acts"].numpy()
@@ -189,6 +194,36 @@ class MLRuntime:
             rng.choice(np.flatnonzero(~labels), min(self.sample_size, (~labels).sum()), replace=False),
         ])
         return acts[selected], labels[selected]
+
+    def _build_static_pca(self, activations, labels):
+        points = PCA(n_components=2).fit_transform(activations)
+        return {
+            "layer": self.layer,
+            "sycophantic": {
+                "x": points[labels, 0].tolist(),
+                "y": points[labels, 1].tolist(),
+            },
+            "non_sycophantic": {
+                "x": points[~labels, 0].tolist(),
+                "y": points[~labels, 1].tolist(),
+            },
+        }
+
+    def _build_static_umap(self, activations, labels):
+        points = UMAP(n_components=3, random_state=42).fit_transform(activations)
+        return {
+            "layer": self.layer,
+            "sycophantic": {
+                "x": points[labels, 0].tolist(),
+                "y": points[labels, 1].tolist(),
+                "z": points[labels, 2].tolist(),
+            },
+            "non_sycophantic": {
+                "x": points[~labels, 0].tolist(),
+                "y": points[~labels, 1].tolist(),
+                "z": points[~labels, 2].tolist(),
+            },
+        }
 
     def _fit_pca(self):
         self._pca = PCA(n_components=2)
@@ -225,10 +260,10 @@ class MLRuntime:
             )
             unsteered = steer_generate.generate_text_from_prompt(
                 self.model, self.tokenizer, prompt, steered_direction,
-                layer, 0.0)
+                layer, 0.0, max_new_tokens=200)
             steered = steer_generate.generate_text_from_prompt(
                 self.model, self.tokenizer, prompt, steered_direction,
-                layer, 1.0)
+                layer, 1.0, max_new_tokens=200)
 
         return {
             "unsteered": {"text": unsteered, "tokens": _tokenize_response(unsteered, False)},
@@ -252,7 +287,9 @@ class MLRuntime:
             pca = self.pca_data()
         return self._last_point, pca
 
-    def pca_data(self):
+    def pca_data(self, dataset="sycophancy"):
+        if dataset == "refusal":
+            return self._refusal_pca_data
         with self._lock:
             return {
                 "layer": self.layer,
@@ -266,7 +303,9 @@ class MLRuntime:
                 },
             }
 
-    def umap_data(self):
+    def umap_data(self, dataset="sycophancy"):
+        if dataset == "refusal":
+            return self._refusal_umap_data
         return self._umap_data
 
     def last_point(self):
@@ -291,7 +330,7 @@ def index():
 @app.route("/api/presets", methods=["GET"])
 def api_presets():
     """Return preset prompts for testing."""
-    return jsonify(mock_data.PRESET_PROMPTS)
+    return jsonify(PRESET_PROMPTS)
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -303,8 +342,6 @@ def api_generate():
         alpha_refusal (float): Steering strength for refusal vector (typically -5.0 to +5.0).
         alpha_sycophancy (float): Steering strength for sycophancy vector (typically -5.0 to +5.0).
         layer (int): Transformer layer index for steering injection (e.g. 10 to 16).
-        model (str): Selected model identifier (e.g. 'qwen-3b', 'llama-3b', 'qwen-27b').
-
     Response (JSON):
         unsteered:
             text (str): Baseline completion without activation steering.
@@ -324,7 +361,7 @@ def api_generate():
     layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        result = mock_data.generate_mock_response(prompt, alpha_refusal, alpha_sycophancy, layer, model)
+        result = _mock_generate(prompt, alpha_refusal, alpha_sycophancy, layer)
         result["mock"] = True
         return jsonify(result)
 
@@ -347,10 +384,12 @@ def api_pca():
     """
     layer = int(request.args.get("layer", DEFAULT_LAYER))
 
-    if MOCK_MODE:
-        return jsonify(mock_data.get_mock_pca(layer))
+    dataset = request.args.get("dataset", "sycophancy")
 
-    return jsonify(ML_RUNTIME.umap_data())
+    if MOCK_MODE:
+        return jsonify(_mock_pca_data(layer))
+
+    return jsonify(ML_RUNTIME.pca_data(dataset))
 
 
 @app.route("/api/umap", methods=["GET"])
@@ -362,10 +401,12 @@ def api_umap():
     """
     layer = int(request.args.get("layer", DEFAULT_LAYER))
 
-    if MOCK_MODE:
-        return jsonify(mock_data.get_mock_umap(layer))
+    dataset = request.args.get("dataset", "sycophancy")
 
-    return jsonify(ML_RUNTIME.pca_data())
+    if MOCK_MODE:
+        return jsonify(_mock_umap_data(layer))
+
+    return jsonify(ML_RUNTIME.umap_data(dataset))
 
 
 @app.route("/api/project", methods=["POST"])
@@ -390,7 +431,7 @@ def api_project():
     layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        point = mock_data.project_mock_prompt(prompt, alpha_r, alpha_s, layer)
+        point = _mock_project_prompt(prompt, alpha_r, alpha_s, layer)
         return jsonify({"prompt_point": point, "mock": True})
 
     try:

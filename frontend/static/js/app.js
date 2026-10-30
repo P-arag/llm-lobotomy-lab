@@ -40,6 +40,7 @@ const layerValue       = $("#layerValue");
 // ── State ────────────────────────────────────────────────────────
 let currentLayer    = 13;
 let pcaBackground   = null;
+let currentBasePoint = null;
 let currentPoint    = null;
 let lastUmapData    = null;
 let umapRotationRAF = null;
@@ -433,6 +434,9 @@ async function runAnimation(prompt) {
     pcaBackground = projData.pca;
     pcaCache.set(currentLayer, projData.pca);
   }
+  if (projData.prompt_point) {
+    currentBasePoint = projData.prompt_point;
+  }
   if (projData.prompt_point && pcaBackground) {
     plotPCAWithPoint(pcaBackground, projData.prompt_point);
   }
@@ -816,6 +820,7 @@ setupFlowSlider({
       clearTimeout(layerDebounceTimer);
       loadPCA(layer);
       loadUMAP(layer);
+      loadRefusalPlots(layer);
       return;
     }
 
@@ -824,6 +829,7 @@ setupFlowSlider({
     layerDebounceTimer = setTimeout(() => {
       loadPCA(layer);
       loadUMAP(layer);
+      loadRefusalPlots(layer);
     }, 75);
   },
 });
@@ -901,18 +907,24 @@ async function loadPCA(layer) {
   }
 }
 
-function plotPCAWithPoint(data, point) {
-  currentPoint = point;
+function plotPCAWithPoint(
+  data,
+  point,
+  targetId = "plotPCA",
+  positiveName = "Sycophantic",
+  negativeName = "Non-Sycophantic",
+) {
+  if (targetId === "plotPCA") currentPoint = point;
   const pt = getPlotlyTheme();
   const traces = [
     {
       x: data.sycophantic.x, y: data.sycophantic.y,
-      mode: "markers", type: "scatter", name: "Sycophantic",
+      mode: "markers", type: "scatter", name: positiveName,
       marker: { color: pt.sycophantic, size: 6, opacity: pt.isLight ? 0.85 : 0.75 },
     },
     {
       x: data.non_sycophantic.x, y: data.non_sycophantic.y,
-      mode: "markers", type: "scatter", name: "Non-Sycophantic",
+      mode: "markers", type: "scatter", name: negativeName,
       marker: { color: pt.nonSycophantic, size: 6, opacity: pt.isLight ? 0.85 : 0.75 },
     },
   ];
@@ -923,7 +935,7 @@ function plotPCAWithPoint(data, point) {
       marker: { color: "#fde047", size: 14, symbol: "diamond", line: { width: 2, color: pt.diamondBorder } },
     });
   }
-  Plotly.react("plotPCA", traces, {
+  Plotly.react(targetId, traces, {
     paper_bgcolor: pt.bg, plot_bgcolor: pt.bg, font: { family: "Inter, sans-serif", size: 11, color: pt.text },
     margin: { t: 10, r: 10, b: 36, l: 36 },
     xaxis: { title: "PC 1", gridcolor: pt.grid, zerolinecolor: pt.grid },
@@ -931,6 +943,10 @@ function plotPCAWithPoint(data, point) {
     legend: { x: 0, y: 1, bgcolor: "rgba(0,0,0,0)", font: { size: 10, color: pt.text } },
     showlegend: true,
   }, PLOTLY_CFG);
+}
+
+function plotRefusalPCA(data) {
+  plotPCAWithPoint(data, null, "plotRefusalPCA", "Refusal", "Non-Refusal");
 }
 
 // UMAP
@@ -963,18 +979,23 @@ async function loadUMAP(layer) {
   }
 }
 
-function plotUMAP(data) {
-  lastUmapData = data;
+function plotUMAP(
+  data,
+  targetId = "plotUMAP",
+  positiveName = "Sycophantic",
+  negativeName = "Non-Sycophantic",
+) {
+  if (targetId === "plotUMAP") lastUmapData = data;
   const pt = getPlotlyTheme();
-  Plotly.react("plotUMAP", [
+  Plotly.react(targetId, [
     {
       x: data.sycophantic.x, y: data.sycophantic.y, z: data.sycophantic.z,
-      mode: "markers", type: "scatter3d", name: "Sycophantic",
+      mode: "markers", type: "scatter3d", name: positiveName,
       marker: { color: pt.sycophantic, size: 3.5, opacity: pt.isLight ? 0.85 : 0.8 },
     },
     {
       x: data.non_sycophantic.x, y: data.non_sycophantic.y, z: data.non_sycophantic.z,
-      mode: "markers", type: "scatter3d", name: "Non-Sycophantic",
+      mode: "markers", type: "scatter3d", name: negativeName,
       marker: { color: pt.nonSycophantic, size: 3.5, opacity: pt.isLight ? 0.85 : 0.8 },
     },
   ], {
@@ -990,6 +1011,21 @@ function plotUMAP(data) {
     legend: { x: 0, y: 1, bgcolor: "rgba(0,0,0,0)", font: { size: 10, color: pt.text } },
     showlegend: true,
   }, PLOTLY_CFG);
+}
+
+function plotRefusalUMAP(data) {
+  plotUMAP(data, "plotRefusalUMAP", "Refusal", "Non-Refusal");
+}
+
+async function loadRefusalPlots(layer) {
+  const [pcaResponse, umapResponse] = await Promise.all([
+    fetch(`/api/pca?layer=${layer}&dataset=refusal`),
+    fetch(`/api/umap?layer=${layer}&dataset=refusal`),
+  ]);
+  if (!pcaResponse.ok || !umapResponse.ok) return;
+  const [pca, umap] = await Promise.all([pcaResponse.json(), umapResponse.json()]);
+  plotRefusalPCA(pca);
+  plotRefusalUMAP(umap);
 }
 
 let umapAngle = 0;
@@ -1880,11 +1916,19 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("resize", () => {
   const pca = document.getElementById("plotPCA");
   const umap = document.getElementById("plotUMAP");
+  const refusalPca = document.getElementById("plotRefusalPCA");
+  const refusalUmap = document.getElementById("plotRefusalUMAP");
   if (pca && window.Plotly) {
     try { Plotly.Plots.resize(pca); } catch (_) {}
   }
   if (umap && window.Plotly) {
     try { Plotly.Plots.resize(umap); } catch (_) {}
+  }
+  if (refusalPca && window.Plotly) {
+    try { Plotly.Plots.resize(refusalPca); } catch (_) {}
+  }
+  if (refusalUmap && window.Plotly) {
+    try { Plotly.Plots.resize(refusalUmap); } catch (_) {}
   }
 });
 
@@ -1899,5 +1943,6 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   loadPCA(currentLayer);
   loadUMAP(currentLayer);
+  loadRefusalPlots(currentLayer);
   if (promptInput) promptInput.focus();
 });
