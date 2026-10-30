@@ -21,8 +21,8 @@ artifacts/
 outputs/
 logs/
 *.ckpt
-*.pt
-!*direction.pt
+# *.pt
+# !*direction.pt
 *.pth
 *.onnx
 

@@ -28,6 +28,17 @@ Generate with a recorded direction (refusal remains the default):
 conda run -n lobo-lab python backend/ml/steer_generate.py --steering sycophancy --alpha 1.0
 ```
 
+Record a balanced 200-point sycophancy sample at layers 8 through 17 and
+create one PCA-2 plot for each layer:
+
+```sh
+conda run -n lobo-lab python backend/ml/record_sycophancy_layer_sweep.py
+```
+
+The activation files and plots are written to
+`backend/ml/out/layer_sweep_200/`. Use `--samples` to change the total sample
+size, or `--out-dir` to choose another output directory.
+
 ## Usage
 
 Run from the repository root. Create a `.env` file containing a Hugging Face

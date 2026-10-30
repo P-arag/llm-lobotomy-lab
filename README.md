@@ -42,6 +42,24 @@ it stays stable while you experiment. The PCA is updated as new prompts are
 submitted, allowing you to see where each prompt lands relative to the
 recorded examples.
 
+## Open Day at BITS Goa
+
+We presented **LLM Lobotomy Lab** at Open Day on **31 October at BITS Goa**.
+The idea was to make a fairly technical topic feel approachable: visitors
+could type a prompt, move the refusal and sycophancy sliders, and immediately
+compare how the model responded before and after steering.
+
+The live dashboard gave us a way to explain what normally stays hidden inside a
+language model. The response panels showed the visible behavior, while the
+PCA and UMAP plots showed how the prompt's internal activation compared with
+examples associated with refusal and sycophancy. This made the demonstration
+less about treating the model as a black box and more about letting people
+experiment with the representations behind its answers.
+
+The project poster is available here:
+
+[View the LLM Lobotomy Lab poster](poster/LLM%20Lobotomy%20Lab%20Poster.pdf)
+
 ## Running the project
 
 ### 1. Create the environment
