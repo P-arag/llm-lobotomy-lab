@@ -14,11 +14,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@400;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5024" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v=5026" />
 </head>
 <body>
 
-  <!-- Interactive WebGL Halftone Shader Background -->
+  <!-- Background canvas -->
   <div class="shader-bg-container" aria-hidden="true">
     <canvas id="shaderCanvas" class="shader-canvas"></canvas>
     <div class="shader-vignette"></div>
@@ -26,9 +26,8 @@
 
   <!-- Header -->
   <header class="header">
-    <!-- Top Left: BITSkrieg Logo -->
     <div class="header__left">
-      <div class="header__logo-wrap" title="BITSkrieg &bull; Open Day 2026">
+      <div class="header__logo-wrap" title="BITSkrieg Open Day 2026">
         <img
           src="{{ url_for('static', filename='img/bitskrieg-logo.png') }}"
           alt="BITSkrieg"
@@ -38,15 +37,15 @@
       </div>
     </div>
 
-    <!-- Center: Interactive Dot Matrix Typography (Pure element, no box) -->
+    <!-- Title -->
     <div class="header__center">
-      <div class="dot-matrix-title" id="dotMatrixTitle" title="LLM Lobotomy Lab &bull; Click or hover to glitch">
+      <div class="dot-matrix-title" id="dotMatrixTitle" title="LLM Lobotomy Lab">
         <canvas id="dotMatrixCanvas" class="dot-matrix-canvas"></canvas>
         <h1 class="sr-only">LLM Lobotomy Lab</h1>
       </div>
     </div>
 
-    <!-- Top Right: Light/Dark Mode Switch (No box) -->
+    <!-- Theme toggle -->
     <div class="header__right">
       <button id="themeToggleBtn" class="theme-toggle" type="button" aria-label="Toggle light and dark mode" title="Switch Theme">
         <span class="theme-toggle__track">
@@ -74,15 +73,12 @@
   <!-- Main Grid -->
   <main class="dashboard">
 
-    <!-- LEFT: Orb Stage + Chat -->
+    <!-- Chat column -->
     <section class="col-left" data-phase="idle">
 
-      <!-- The Orb Stage (overlays the chat area) -->
       <div class="orb-stage" id="orbStage">
-        <!-- Center halo glow -->
         <div class="orb-stage__halo" id="stageHalo"></div>
 
-        <!-- The unified orb (pre-split) -->
         <div class="orb-mover" id="orbMover">
           <div class="orb-actor" id="orbActor">
             <div class="orb-glow"></div>
@@ -94,26 +90,23 @@
           </div>
         </div>
 
-        <!-- Split orb L (flies to Normal panel) -->
         <div class="split-orb split-orb--left" id="splitL">
           <canvas class="orb-canvas" id="orbCanvasL" width="280" height="280"></canvas>
           <div class="split-orb__glow"></div>
         </div>
 
-        <!-- Split orb R (flies to Steered panel) -->
         <div class="split-orb split-orb--right" id="splitR">
           <canvas class="orb-canvas" id="orbCanvasR" width="280" height="280"></canvas>
           <div class="split-orb__glow"></div>
         </div>
 
-        <!-- Status label (Thinking... / Searching... ) -->
         <div class="orb-status" id="orbStatus">
           <span class="orb-status__label" id="statusLabel">Thinking</span>
           <span class="orb-status__dots"><i></i><i></i><i></i></span>
         </div>
       </div>
 
-      <!-- Chat Panels with Cursor Illumination -->
+      <!-- Chat panels -->
       <div class="chat-row" id="chatRow">
         <div class="chat-panel cursor-card" id="panelNormal" data-trait="unsteered">
           <div class="cursor-card__border" aria-hidden="true"></div>
@@ -141,14 +134,14 @@
         </div>
       </div>
 
-      <!-- In-Response Token Activation Legend (revealed after generation) -->
+      <!-- Token legend -->
       <div class="response-legend" id="responseLegend">
         <span class="legend-label legend-label--suppressed">&larr; Suppressed</span>
         <div class="legend-bar"></div>
         <span class="legend-label legend-label--amplified">Amplified &rarr;</span>
       </div>
 
-      <!-- Prompt Bar (Only the prompt slot with reactive cursor illumination) -->
+      <!-- Prompt Bar -->
       <div class="prompt-bar" id="promptBar">
         <form class="prompt-bar__form" id="promptForm" autocomplete="off">
           <div class="prompt-pill cursor-card" id="promptPill">
@@ -174,10 +167,9 @@
 
     </section>
 
-    <!-- RIGHT: Controls + Plots -->
+    <!-- Controls and plots -->
     <section class="col-right">
 
-      <!-- Controls with Cursor Illumination -->
       <div class="controls-card cursor-card" data-trait="controls">
         <div class="cursor-card__border" aria-hidden="true"></div>
         <div class="cursor-card__illumination" aria-hidden="true"></div>
@@ -271,14 +263,14 @@
         </div>
       </div>
 
-      <!-- Plots with Cursor Illumination -->
+      <!-- Plots -->
       <div class="plots-row">
         <div class="plot-card cursor-card" data-trait="pca">
           <div class="cursor-card__border" aria-hidden="true"></div>
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--cyan"></span>
-            <span>Real-time 2D PCA</span>
+            <span>2D PCA</span>
           </h3>
           <div id="plotPCA" class="plot-container"></div>
         </div>
@@ -287,7 +279,7 @@
           <div class="cursor-card__illumination" aria-hidden="true"></div>
           <h3 class="card-title card-title--sm">
             <span class="plot-card__dot plot-card__dot--purple"></span>
-            <span>3D UMAP Manifold</span>
+            <span>3D UMAP</span>
           </h3>
           <div id="plotUMAP" class="plot-container"></div>
         </div>
@@ -296,6 +288,13 @@
     </section>
   </main>
 
-  <script src="{{ url_for('static', filename='js/app.js') }}?v=5024" defer></script>
+  <!-- Footer -->
+  <footer class="app-footer">
+    <span>Bitskrieg Open Day 2026</span>
+    <span class="app-footer__divider" aria-hidden="true">|</span>
+    <span>Developed by <span class="app-footer__author">Chaitanya Ahuja</span></span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='js/app.js') }}?v=5026" defer></script>
 </body>
 </html>

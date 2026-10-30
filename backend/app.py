@@ -284,28 +284,38 @@ def _tokenize_response(text, steered):
 
 @app.route("/")
 def index():
+    """Render the dashboard UI."""
     return render_template("index.html")
 
 
-# ---------------------------------------------------------------------------
-# Routes – API
-# ---------------------------------------------------------------------------
-
 @app.route("/api/presets", methods=["GET"])
 def api_presets():
-    """Return list of one-click demo presets."""
-    return jsonify(PRESET_PROMPTS)
+    """Return preset prompts for testing."""
+    return jsonify(mock_data.PRESET_PROMPTS)
 
 
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
-    """Generate steered and unsteered responses for a prompt.
+    """Generate unsteered and steered responses for a prompt.
 
-    Body JSON:
-        prompt (str): user prompt
-        alpha_refusal (float): refusal steering strength
-        alpha_sycophancy (float): sycophancy steering strength
-        layer (int): transformer layer to inject at
+    Request Body (JSON):
+        prompt (str): The input prompt from user.
+        alpha_refusal (float): Steering strength for refusal vector (typically -5.0 to +5.0).
+        alpha_sycophancy (float): Steering strength for sycophancy vector (typically -5.0 to +5.0).
+        layer (int): Transformer layer index for steering injection (e.g. 10 to 16).
+        model (str): Selected model identifier (e.g. 'qwen-3b', 'llama-3b', 'qwen-27b').
+
+    Response (JSON):
+        unsteered:
+            text (str): Baseline completion without activation steering.
+            tokens (list[dict]): Tokens with activation/logit deltas:
+                [{"token": "word", "logit_delta": float}, ...]
+        steered:
+            text (str): Completion with residual stream forward hook applied.
+            tokens (list[dict]): Tokens with activation/logit deltas:
+                [{"token": "word", "logit_delta": float}, ...]
+        params:
+            Echo of applied steering parameters.
     """
     data = request.get_json(force=True)
     prompt = data.get("prompt", "")
@@ -314,7 +324,7 @@ def api_generate():
     layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        result = _mock_generate(prompt, alpha_refusal, alpha_sycophancy, layer)
+        result = mock_data.generate_mock_response(prompt, alpha_refusal, alpha_sycophancy, layer, model)
         result["mock"] = True
         return jsonify(result)
 
@@ -328,9 +338,9 @@ def api_generate():
         return jsonify({"error": str(exc)}), 500
 
 
-@app.route("/api/umap", methods=["GET"])
-def api_umap():
-    """Return precomputed 3-D UMAP coordinates for a given layer.
+@app.route("/api/pca", methods=["GET"])
+def api_pca():
+    """Return 2D PCA projection coordinates of activation clusters for a layer.
 
     Query params:
         layer (int, default 13)
@@ -338,14 +348,14 @@ def api_umap():
     layer = int(request.args.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        return jsonify(_mock_umap_data(layer))
+        return jsonify(mock_data.get_mock_pca(layer))
 
     return jsonify(ML_RUNTIME.umap_data())
 
 
-@app.route("/api/pca", methods=["GET"])
-def api_pca():
-    """Return precomputed 2-D PCA background clusters.
+@app.route("/api/umap", methods=["GET"])
+def api_umap():
+    """Return 3D UMAP coordinates of activation clusters for a layer.
 
     Query params:
         layer (int, default 13)
@@ -353,20 +363,25 @@ def api_pca():
     layer = int(request.args.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        return jsonify(_mock_pca_data(layer))
+        return jsonify(mock_data.get_mock_umap(layer))
 
     return jsonify(ML_RUNTIME.pca_data())
 
 
 @app.route("/api/project", methods=["POST"])
 def api_project():
-    """Project the current prompt's activation onto the 2-D PCA plane.
+    """Project the user's current prompt activation onto the 2D PCA plane.
 
-    Body JSON:
-        prompt (str)
-        alpha_refusal (float)
-        alpha_sycophancy (float)
-        layer (int)
+    Request Body (JSON):
+        prompt (str): Current prompt text.
+        alpha_refusal (float): Refusal steering strength.
+        alpha_sycophancy (float): Sycophancy steering strength.
+        layer (int): Layer index.
+
+    Response (JSON):
+        prompt_point:
+            x (float): Projected X coordinate.
+            y (float): Projected Y coordinate.
     """
     data = request.get_json(force=True)
     prompt = data.get("prompt", "")
@@ -375,7 +390,7 @@ def api_project():
     layer = int(data.get("layer", DEFAULT_LAYER))
 
     if MOCK_MODE:
-        point = _mock_project_prompt(prompt, alpha_r, alpha_s, layer)
+        point = mock_data.project_mock_prompt(prompt, alpha_r, alpha_s, layer)
         return jsonify({"prompt_point": point, "mock": True})
 
     try:
@@ -385,10 +400,6 @@ def api_project():
         app.logger.exception("Live prompt projection failed")
         return jsonify({"error": str(exc)}), 500
 
-
-# ---------------------------------------------------------------------------
-# Entrypoint
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="LLM Lobotomy Lab backend")
