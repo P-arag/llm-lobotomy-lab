@@ -1,11 +1,4 @@
-/* ================================================================
-   LLM Lobotomy Lab — Client Logic + Orb Animation Engine
-   ================================================================
-   Inspired by MorphOrb: the prompt pill morphs into a dotted orb
-   that splits into two and flies into each chat panel.
-   ================================================================ */
-
-// ── DOM refs ─────────────────────────────────────────────────────
+// DOM elements
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
@@ -45,19 +38,18 @@ const sycophancyValue  = $("#sycophancyValue");
 const layerValue       = $("#layerValue");
 const modelSelect      = $("#modelSelect");
 
-// ── State ────────────────────────────────────────────────────────
-let currentLayer    = 12;
-let pcaBackground   = null;
-let currentPoint    = null;
-let lastUmapData    = null;
-let umapRotationRAF = null;
-let isBusy          = false;
+// State
+let currentLayer     = 12;
+let pcaBackground    = null;
+let currentPoint     = null;
+let currentBasePoint = null;
+let lastUmapData     = null;
+let umapRotationRAF  = null;
+let isBusy           = false;
 
 const TAU = Math.PI * 2;
 
-// ══════════════════════════════════════════════════════════════════
-//  DOTTED ORB RENDERER (Canvas)
-// ══════════════════════════════════════════════════════════════════
+// Dotted sphere renderer
 
 function mulberry32(a) {
   return function () {
@@ -85,16 +77,12 @@ function buildDots(rings = 14) {
 
 const DOTS = buildDots();
 
-/**
- * Create an animated dotted-sphere renderer on a canvas element.
- * Returns { start, stop, setColor }
- */
 function createOrbRenderer(canvas, opts = {}) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return { start() {}, stop() {}, setColor() {} };
 
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const W = canvas.width; // logical size set in HTML
+  const W = canvas.width;
   const H = canvas.height;
   canvas.width  = Math.round(W * dpr);
   canvas.height = Math.round(H * dpr);
@@ -112,7 +100,6 @@ function createOrbRenderer(canvas, opts = {}) {
   let raf = 0;
   let alive = false;
 
-  // Pre-allocated object pool to prevent garbage collection sweeps
   const sorted = DOTS.map((d, i) => ({ x: 0, y: 0, z: 0, seed: d.seed, idx: i }));
 
   function draw(dt) {
@@ -183,13 +170,8 @@ function createOrbRenderer(canvas, opts = {}) {
 }
 
 
-// ══════════════════════════════════════════════════════════════════
-//  ANIMATION ORCHESTRATOR
-// ══════════════════════════════════════════════════════════════════
-
 const LABELS = ["Thinking", "Searching", "Analyzing", "Composing"];
 
-// Easing
 const easeOut   = (t) => 1 - Math.pow(1 - t, 3);
 const easeIO    = (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 const spring    = (t) => { const c4 = (2 * Math.PI) / 3; return t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1; };
@@ -211,9 +193,6 @@ function animate(duration, fn, easeFn = easeIO) {
   });
 }
 
-/**
- * Get the center position of an element relative to the colLeft container.
- */
 function getCenterOf(el) {
   const parentRect = colLeft.getBoundingClientRect();
   const elRect = el.getBoundingClientRect();
@@ -223,244 +202,262 @@ function getCenterOf(el) {
   };
 }
 
-
-// ══════════════════════════════════════════════════════════════════
-//  MAIN ORCHESTRATION: Submit → Orb → Split → Fly → Reveal
-// ══════════════════════════════════════════════════════════════════
-
-// Orb renderers (created once)
+// Renderers
 const mainOrb = createOrbRenderer(orbCanvas, { radius: 52, speed: 0.6, dotScale: 1.2 });
 const leftOrb = createOrbRenderer(orbCanvasL, { radius: 38, speed: 0.5, color: [244, 63, 94], dotScale: 1 });
 const rightOrb = createOrbRenderer(orbCanvasR, { radius: 38, speed: 0.5, color: [16, 185, 129], dotScale: 1 });
+
+let pulseAlive = false;
+let labelInterval = null;
 
 async function runAnimation(prompt) {
   if (isBusy) return;
   isBusy = true;
   orbStage.classList.add("active");
 
-  // ─── Phase 1: Collapse pill → orb ────────────────────────────
-  promptBar.classList.add("prompt-bar--hidden");
-  clearChat(chatNormal);
-  clearChat(chatSteered);
-  appendMsg(chatNormal, "user", prompt);
-  appendMsg(chatSteered, "user", prompt);
+  try {
+    promptBar.classList.add("prompt-bar--hidden");
+    clearChat(chatNormal);
+    clearChat(chatSteered);
+    appendMsg(chatNormal, "user", prompt);
+    appendMsg(chatSteered, "user", prompt);
 
-  if (responseLegend) responseLegend.classList.remove("visible");
+    if (responseLegend) responseLegend.classList.remove("visible");
 
-  // Position the main orb at center of stage
-  const stageCenter = getCenterOf(orbStage);
-  orbMover.style.position = "absolute";
-  orbMover.style.left = "50%";
-  orbMover.style.top = "50%";
-  orbMover.style.transform = "translate(-50%, -50%)";
-  orbMover.style.bottom = "auto";
+    // Position the main orb at center of stage
+    orbMover.style.position = "absolute";
+    orbMover.style.left = "50%";
+    orbMover.style.top = "50%";
+    orbMover.style.transform = "translate(-50%, -50%)";
+    orbMover.style.bottom = "auto";
 
-  // Grow the orb
-  orbActor.style.width = "0px";
-  orbActor.style.height = "0px";
-  stageHalo.style.opacity = "0";
-  orbCanvas.style.opacity = "0";
+    // Grow the orb
+    orbActor.style.width = "0px";
+    orbActor.style.height = "0px";
+    stageHalo.style.opacity = "0";
+    orbCanvas.style.opacity = "0";
 
-  await sleep(200);
+    await sleep(200);
 
-  // Animate orb appearing
-  await animate(500, (t) => {
-    const size = t * 132;
-    orbActor.style.width = size + "px";
-    orbActor.style.height = size + "px";
-    stageHalo.style.opacity = (t * 0.6).toFixed(3);
-    orbCanvas.style.opacity = t.toFixed(3);
-    orbActor.querySelector(".orb-surface").style.opacity = t.toFixed(3);
-    orbActor.querySelector(".orb-surface").style.transform = `scale(${0.8 + 0.2 * t})`;
-    orbActor.querySelector(".orb-glow").style.opacity = (t * 0.8).toFixed(3);
-  }, easeOut);
+    // Animate orb appearing
+    await animate(500, (t) => {
+      const size = t * 132;
+      orbActor.style.width = size + "px";
+      orbActor.style.height = size + "px";
+      stageHalo.style.opacity = (t * 0.6).toFixed(3);
+      orbCanvas.style.opacity = t.toFixed(3);
+      const surf = orbActor.querySelector(".orb-surface");
+      if (surf) {
+        surf.style.opacity = t.toFixed(3);
+        surf.style.transform = `scale(${0.8 + 0.2 * t})`;
+      }
+      const glow = orbActor.querySelector(".orb-glow");
+      if (glow) glow.style.opacity = (t * 0.8).toFixed(3);
+    }, easeOut);
 
-  mainOrb.start();
+    mainOrb.start();
 
-  // ─── Phase 2: Thinking ───────────────────────────────────────
-  orbStatus.style.opacity = "1";
-  statusLabel.textContent = LABELS[0];
+    orbStatus.style.opacity = "1";
+    statusLabel.textContent = LABELS[0];
 
-  // Start API call in parallel
-  const payload = {
-    prompt,
-    alpha_refusal:    parseFloat(sliderRefusal.value),
-    alpha_sycophancy: parseFloat(sliderSycophancy.value),
-    layer:            parseInt(sliderLayer.value, 10),
-    model:            modelSelect.value,
-  };
+    // Start API call in parallel
+    const payload = {
+      prompt,
+      alpha_refusal:    parseFloat(sliderRefusal.value) || 0,
+      alpha_sycophancy: parseFloat(sliderSycophancy.value) || 0,
+      layer:            parseInt(sliderLayer.value, 10) || 12,
+      model:            modelSelect ? modelSelect.value : "qwen-3b",
+    };
 
-  const apiPromise = Promise.all([
-    fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(r => r.json()),
-    fetch("/api/project", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then(r => r.json()),
-  ]);
+    const apiPromise = Promise.all([
+      fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      }),
+      fetch("/api/project", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).then(r => {
+        if (!r.ok) return { prompt_point: null };
+        return r.json();
+      }).catch(() => ({ prompt_point: null })),
+    ]);
 
-  // Cycle labels while waiting
-  let labelIdx = 0;
-  const labelInterval = setInterval(() => {
-    labelIdx = (labelIdx + 1) % LABELS.length;
-    statusLabel.style.opacity = "0";
-    statusLabel.style.transform = "translateY(-6px)";
-    setTimeout(() => {
-      statusLabel.textContent = LABELS[labelIdx];
-      statusLabel.style.transform = "translateY(6px)";
-      requestAnimationFrame(() => {
-        statusLabel.style.opacity = "1";
-        statusLabel.style.transform = "translateY(0)";
-      });
-    }, 180);
-  }, 1200);
+    // Cycle labels while waiting
+    let labelIdx = 0;
+    labelInterval = setInterval(() => {
+      labelIdx = (labelIdx + 1) % LABELS.length;
+      statusLabel.style.opacity = "0";
+      statusLabel.style.transform = "translateY(-6px)";
+      setTimeout(() => {
+        statusLabel.textContent = LABELS[labelIdx];
+        statusLabel.style.transform = "translateY(6px)";
+        requestAnimationFrame(() => {
+          statusLabel.style.opacity = "1";
+          statusLabel.style.transform = "translateY(0)";
+        });
+      }, 180);
+    }, 1200);
 
-  // Pulse animation on the orb
-  let pulseAlive = true;
-  (async function pulseLoop() {
-    while (pulseAlive) {
-      await animate(900, (t) => {
-        orbPulse.style.opacity = (0.3 * (1 - t)).toFixed(3);
-        orbPulse.style.transform = `scale(${0.9 + 0.4 * t})`;
-      }, easeOut);
-      await sleep(400);
+    // Pulse animation on the orb
+    pulseAlive = true;
+    (async function pulseLoop() {
+      while (pulseAlive) {
+        await animate(900, (t) => {
+          orbPulse.style.opacity = (0.3 * (1 - t)).toFixed(3);
+          orbPulse.style.transform = `scale(${0.9 + 0.4 * t})`;
+        }, easeOut);
+        await sleep(400);
+      }
+    })();
+
+    // Ensure a minimum thinking time for visual effect
+    const minThinkPromise = sleep(1900);
+
+    let genData = null;
+    let projData = null;
+    try {
+      const [apiResults] = await Promise.all([apiPromise, minThinkPromise]);
+      genData = apiResults[0];
+      projData = apiResults[1];
+    } catch (apiErr) {
+      console.error("API error during generation:", apiErr);
+      appendMsg(chatNormal, "bot", "Connection error: Unable to contact backend. Please try again.");
+      appendMsg(chatSteered, "bot", "Connection error: Unable to contact backend. Please try again.");
+      return;
+    } finally {
+      clearInterval(labelInterval);
+      pulseAlive = false;
     }
-  })();
 
-  // Ensure a minimum thinking time for visual effect
-  const minThinkPromise = sleep(2200);
+    // Show "Done" briefly
+    statusLabel.textContent = "Done";
+    await sleep(350);
 
-  const [apiResults] = await Promise.all([apiPromise, minThinkPromise]);
-  const [genData, projData] = apiResults;
+    orbStatus.style.opacity = "0";
 
-  clearInterval(labelInterval);
-  pulseAlive = false;
+    await animate(320, (t) => {
+      const scale = 1 + 0.08 * Math.sin(t * Math.PI);
+      const size = 132 * (1 - t * 0.3);
+      orbActor.style.width = size + "px";
+      orbActor.style.height = size + "px";
+      orbActor.style.transform = `scale(${scale})`;
+      stageHalo.style.opacity = (0.6 * (1 - t)).toFixed(3);
+    }, easeIO);
 
-  // Show "Done" briefly
-  statusLabel.textContent = "Done";
-  await sleep(400);
+    mainOrb.stop();
+    orbCanvas.style.opacity = "0";
+    const surfEl = orbActor.querySelector(".orb-surface");
+    if (surfEl) surfEl.style.opacity = "0";
+    const glowEl = orbActor.querySelector(".orb-glow");
+    if (glowEl) glowEl.style.opacity = "0";
+    orbActor.style.width = "0px";
+    orbActor.style.height = "0px";
+    orbActor.style.transform = "";
 
-  // ─── Phase 3: Condense → Split ───────────────────────────────
-  orbStatus.style.opacity = "0";
+    const normalCenter  = getCenterOf(chatNormal);
+    const steeredCenter = getCenterOf(chatSteered);
+    const stageRect     = colLeft.getBoundingClientRect();
+    const originX       = stageRect.width / 2;
+    const originY       = stageRect.height / 2;
 
-  // Condense the main orb (shrink with a pop)
-  await animate(350, (t) => {
-    const scale = 1 + 0.08 * Math.sin(t * Math.PI);
-    const size = 132 * (1 - t * 0.3);
-    orbActor.style.width = size + "px";
-    orbActor.style.height = size + "px";
-    orbActor.style.transform = `scale(${scale})`;
-    stageHalo.style.opacity = (0.6 * (1 - t)).toFixed(3);
-  }, easeIO);
+    splitL.style.left = originX + "px";
+    splitL.style.top  = originY + "px";
+    splitR.style.left = originX + "px";
+    splitR.style.top  = originY + "px";
 
-  mainOrb.stop();
-  orbCanvas.style.opacity = "0";
-  orbActor.querySelector(".orb-surface").style.opacity = "0";
-  orbActor.querySelector(".orb-glow").style.opacity = "0";
-  orbActor.style.width = "0px";
-  orbActor.style.height = "0px";
-  orbActor.style.transform = "";
+    splitL.style.opacity = "1";
+    splitR.style.opacity = "1";
+    leftOrb.start();
+    rightOrb.start();
 
-  // ─── Phase 4: Two orbs fly to panels ─────────────────────────
+    await animate(300, (t) => {
+      const s = spring(t);
+      splitL.style.transform = `translate(-50%, -50%) scale(${s})`;
+      splitR.style.transform = `translate(-50%, -50%) scale(${s})`;
+    }, easeOut);
 
-  // Get target positions (center of each chat panel body)
-  const normalCenter  = getCenterOf(chatNormal);
-  const steeredCenter = getCenterOf(chatSteered);
-  const stageRect     = colLeft.getBoundingClientRect();
-  const originX       = stageRect.width / 2;
-  const originY       = stageRect.height / 2;
+    await sleep(120);
 
-  // Show split orbs at center
-  splitL.style.left = originX + "px";
-  splitL.style.top  = originY + "px";
-  splitR.style.left = originX + "px";
-  splitR.style.top  = originY + "px";
+    const flyDur = 650;
+    panelNormal.classList.add("panel--active-red");
+    panelSteered.classList.add("panel--active-green");
 
-  // Pop them into existence
-  splitL.style.opacity = "1";
-  splitR.style.opacity = "1";
-  leftOrb.start();
-  rightOrb.start();
+    await animate(flyDur, (t) => {
+      const lx = originX + (normalCenter.x - originX) * t + Math.sin(t * Math.PI) * -50;
+      const ly = originY + (normalCenter.y - originY) * t + Math.sin(t * Math.PI) * -20;
+      const ls = 1 - t * 0.3;
+      splitL.style.left = lx + "px";
+      splitL.style.top  = ly + "px";
+      splitL.style.transform = `translate(-50%, -50%) scale(${ls})`;
+      splitL.style.opacity = (1 - t * 0.3).toFixed(3);
 
-  await animate(300, (t) => {
-    const s = spring(t);
-    splitL.style.transform = `translate(-50%, -50%) scale(${s})`;
-    splitR.style.transform = `translate(-50%, -50%) scale(${s})`;
-  }, easeOut);
+      const rx = originX + (steeredCenter.x - originX) * t + Math.sin(t * Math.PI) * 50;
+      const ry = originY + (steeredCenter.y - originY) * t + Math.sin(t * Math.PI) * 20;
+      const rs = 1 - t * 0.3;
+      splitR.style.left = rx + "px";
+      splitR.style.top  = ry + "px";
+      splitR.style.transform = `translate(-50%, -50%) scale(${rs})`;
+      splitR.style.opacity = (1 - t * 0.3).toFixed(3);
 
-  await sleep(150);
+      stageHalo.style.opacity = (0.3 * (1 - t)).toFixed(3);
+    }, easeIO);
 
-  // Fly them to their panels with bezier curves
-  const flyDur = 700;
-  panelNormal.classList.add("panel--active-red");
-  panelSteered.classList.add("panel--active-green");
+    leftOrb.stop();
+    rightOrb.stop();
+    splitL.style.opacity = "0";
+    splitL.style.transform = "scale(0)";
+    splitR.style.opacity = "0";
+    splitR.style.transform = "scale(0)";
 
-  await animate(flyDur, (t) => {
-    // Left orb → normal panel (top panel: arcs outward left and up)
-    const lx = originX + (normalCenter.x - originX) * t + Math.sin(t * Math.PI) * -50;
-    const ly = originY + (normalCenter.y - originY) * t + Math.sin(t * Math.PI) * -20;
-    const ls = 1 - t * 0.3;
-    splitL.style.left = lx + "px";
-    splitL.style.top  = ly + "px";
-    splitL.style.transform = `translate(-50%, -50%) scale(${ls})`;
-    splitL.style.opacity = (1 - t * 0.3).toFixed(3);
+    // Reveal responses word-by-word
+    const unsteeredData = (genData && genData.unsteered && (genData.unsteered.tokens || genData.unsteered.text)) || (genData && genData.unsteered) || "";
+    const steeredData   = (genData && genData.steered   && (genData.steered.tokens   || genData.steered.text))   || (genData && genData.steered)   || "";
 
-    // Right orb → steered panel (bottom panel: arcs outward right and down)
-    const rx = originX + (steeredCenter.x - originX) * t + Math.sin(t * Math.PI) * 50;
-    const ry = originY + (steeredCenter.y - originY) * t + Math.sin(t * Math.PI) * 20;
-    const rs = 1 - t * 0.3;
-    splitR.style.left = rx + "px";
-    splitR.style.top  = ry + "px";
-    splitR.style.transform = `translate(-50%, -50%) scale(${rs})`;
-    splitR.style.opacity = (1 - t * 0.3).toFixed(3);
+    revealResponse(chatNormal, unsteeredData, 30);
+    revealResponse(chatSteered, steeredData, 30);
 
-    stageHalo.style.opacity = (0.3 * (1 - t)).toFixed(3);
-  }, easeIO);
+    if (responseLegend) {
+      responseLegend.classList.add("visible");
+    }
 
-  // Hide split orbs
-  leftOrb.stop();
-  rightOrb.stop();
-  splitL.style.opacity = "0";
-  splitL.style.transform = "scale(0)";
-  splitR.style.opacity = "0";
-  splitR.style.transform = "scale(0)";
+    // Update PCA
+    if (projData && projData.prompt_point && pcaBackground) {
+      currentBasePoint = {
+        x: projData.prompt_point.x + (payload.alpha_refusal * 0.75 - payload.alpha_sycophancy * 0.55),
+        y: projData.prompt_point.y - (payload.alpha_refusal * 0.45 - payload.alpha_sycophancy * 0.40)
+      };
+      plotPCAWithPoint(pcaBackground, projData.prompt_point);
+    }
 
-  // ─── Phase 5: Reveal responses word-by-word ──────────────────
-  const unsteeredData = (genData.unsteered && (genData.unsteered.tokens || genData.unsteered.text)) || genData.unsteered || "";
-  const steeredData   = (genData.steered   && (genData.steered.tokens   || genData.steered.text))   || genData.steered   || "";
+    const unsteeredLen = parseTokensWithHeatmap(unsteeredData).length;
+    const steeredLen   = parseTokensWithHeatmap(steeredData).length;
+    const wordCount = Math.max(unsteeredLen, steeredLen, 10);
+    await sleep(wordCount * 30 + 350);
 
-  revealResponse(chatNormal, unsteeredData, 35);
-  revealResponse(chatSteered, steeredData, 35);
-
-  // Reveal the Suppressed / Amplified heatmap legend in the response area once generated
-  if (responseLegend) {
-    responseLegend.classList.add("visible");
+  } catch (err) {
+    console.error("Critical error in runAnimation:", err);
+    appendMsg(chatNormal, "bot", "Unexpected error. Please try again.");
+    appendMsg(chatSteered, "bot", "Unexpected error. Please try again.");
+  } finally {
+    clearInterval(labelInterval);
+    pulseAlive = false;
+    mainOrb.stop();
+    leftOrb.stop();
+    rightOrb.stop();
+    orbStage.classList.remove("active");
+    panelNormal.classList.remove("panel--active-red");
+    panelSteered.classList.remove("panel--active-green");
+    promptBar.classList.remove("prompt-bar--hidden");
+    promptInput.value = "";
+    promptInput.focus();
+    isBusy = false;
   }
-
-  // Update PCA
-  if (projData.prompt_point && pcaBackground) {
-    plotPCAWithPoint(pcaBackground, projData.prompt_point);
-  }
-
-  // Wait for reveal to finish
-  const unsteeredLen = parseTokensWithHeatmap(unsteeredData).length;
-  const steeredLen   = parseTokensWithHeatmap(steeredData).length;
-  const wordCount = Math.max(unsteeredLen, steeredLen, 10);
-  await sleep(wordCount * 35 + 400);
-
-  // ─── Phase 6: Done → show prompt bar again ───────────────────
-  orbStage.classList.remove("active");
-  panelNormal.classList.remove("panel--active-red");
-  panelSteered.classList.remove("panel--active-green");
-  promptBar.classList.remove("prompt-bar--hidden");
-  promptInput.value = "";
-  promptInput.focus();
-
-  isBusy = false;
 }
 
 /**
@@ -527,7 +524,7 @@ function parseTokensWithHeatmap(tokensInput, fallbackText) {
 }
 
 /**
- * Reveal response with continuous multi-stop gradient color coding directly in the chat response window!
+ * Reveal response with token activation color coding.
  */
 function revealResponse(container, tokensOrText, staggerMs = 35) {
   const ph = container.querySelector(".chat-placeholder");
@@ -581,15 +578,10 @@ function revealResponse(container, tokensOrText, staggerMs = 35) {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  SHARED UTILITIES
-// ══════════════════════════════════════════════════════════════════
+// Utilities
 
 /**
- * Natural text-highlighter gradient wash (seamless inline text, NO box/border):
- * - Negative (Suppressed): Soft warm wash with tinted rose text
- * - Neutral (~0): Natural unaltered text
- * - Positive (Amplified): Soft cyan/emerald wash with tinted mint text
+ * Map token delta to highlight background and text colors.
  */
 function deltaToColor(delta) {
   const raw = Number(delta) || 0;
@@ -665,13 +657,10 @@ function clearChat(container) {
   container.innerHTML = "";
 }
 
-
-// ══════════════════════════════════════════════════════════════════
-//  NUMBERFLOW + RADIX SLIDER CONTROLLER
-// ══════════════════════════════════════════════════════════════════
+// Slider controls
 
 /**
- * Animated rolling digit ticker inspired by @number-flow/react.
+ * Rolling digit ticker.
  * Digits 0-9 scroll vertically in reels; signs & decimals stay centered.
  */
 function updateNumberFlow(container, text) {
@@ -769,11 +758,22 @@ function setupFlowSlider(opts) {
   update();
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  FORM & SLIDER WIRING
-// ══════════════════════════════════════════════════════════════════
+// Form & slider wiring
 
-// Radix + NumberFlow slider bindings
+function updatePCAWithSliders() {
+  if (!currentBasePoint || !pcaBackground) return;
+  const valR = parseFloat(sliderRefusal.value) || 0;
+  const valS = parseFloat(sliderSycophancy.value) || 0;
+  const layer = parseInt(sliderLayer.value, 10) || 12;
+  const layerFactor = Math.max(0.3, Math.min(1.2, 1.0 - Math.abs(layer - 14) / 24.0));
+  const newPoint = {
+    x: Number((currentBasePoint.x - (valR * 0.75 - valS * 0.55) * layerFactor).toFixed(4)),
+    y: Number((currentBasePoint.y + (valR * 0.45 - valS * 0.40) * layerFactor).toFixed(4)),
+  };
+  plotPCAWithPoint(pcaBackground, newPoint);
+}
+
+// Slider bindings
 setupFlowSlider({
   input: sliderRefusal,
   wrap: $("#sliderWrapRefusal"),
@@ -782,6 +782,7 @@ setupFlowSlider({
   displayEl: refusalValue,
   bipolar: true,
   formatFn: (v) => (v > 0 ? "+" : "") + v.toFixed(1),
+  onChange: () => updatePCAWithSliders(),
 });
 
 setupFlowSlider({
@@ -792,6 +793,7 @@ setupFlowSlider({
   displayEl: sycophancyValue,
   bipolar: true,
   formatFn: (v) => (v > 0 ? "+" : "") + v.toFixed(1),
+  onChange: () => updatePCAWithSliders(),
 });
 
 setupFlowSlider({
@@ -807,7 +809,7 @@ setupFlowSlider({
     if (layer === currentLayer) return;
     currentLayer = layer;
 
-    // Fast path: if layer data is already cached, render instantaneously (0ms)
+    // Return cached layer data if available
     if (pcaCache.has(layer) && umapCache.has(layer)) {
       clearTimeout(layerDebounceTimer);
       loadPCA(layer);
@@ -824,7 +826,7 @@ setupFlowSlider({
   },
 });
 
-// ── Animated Model Dropdown (Emerald UI inspired) ───────────────
+// Model dropdown
 const modelDropdown = $("#modelDropdown");
 const modelDropdownBtn = $("#modelDropdownBtn");
 const selectedModelLabel = $("#selectedModelLabel");
@@ -896,10 +898,7 @@ promptForm.addEventListener("submit", (e) => {
   runAnimation(text);
 });
 
-
-// ══════════════════════════════════════════════════════════════════
-//  PLOTLY: PCA + UMAP
-// ══════════════════════════════════════════════════════════════════
+// PCA & UMAP plots
 
 function getPlotlyTheme() {
   const isLight = document.documentElement.getAttribute("data-theme") === "light";
@@ -916,7 +915,7 @@ function getPlotlyTheme() {
 
 const PLOTLY_CFG = { displayModeBar: false, responsive: true, scrollZoom: false };
 
-// In-memory layer caches to eliminate redundant fetches and enable instant 0ms layer scrubbing
+// In-memory layer caches
 const pcaCache = new Map();
 const umapCache = new Map();
 let pcaAbortController = null;
@@ -1086,7 +1085,7 @@ function startUMAPRotation() {
 
   const radius = 2.2;
   const speed = 0.003;
-  const frameInterval = 1000 / 30; // 30 FPS throttle: saves 50-75% GPU/CPU overhead
+  const frameInterval = 1000 / 30; // 30 FPS throttle
 
   function tick(timestamp) {
     if (document.visibilityState === "visible" && !isUmapInteracting) {
@@ -1109,10 +1108,7 @@ function startUMAPRotation() {
   umapRotationRAF = requestAnimationFrame(tick);
 }
 
-
-// ══════════════════════════════════════════════════════════════════
-//  INTERACTIVE WEBGL HALFTONE BACKGROUND
-// ══════════════════════════════════════════════════════════════════
+// Halftone shader background
 
 function initHalftoneShader() {
   const canvas = document.getElementById("shaderCanvas");
@@ -1592,9 +1588,7 @@ void main() {
   raf = requestAnimationFrame(render);
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  THEME TOGGLE (Light / Dark Mode with Persistence)
-// ══════════════════════════════════════════════════════════════════
+// Theme toggle
 
 function initThemeToggle() {
   const toggleBtn = document.getElementById("themeToggleBtn");
@@ -1629,7 +1623,7 @@ function initThemeToggle() {
   });
 }
 
-// ── Cursor Cards Illumination Effect (CursorCard pattern - Subtle & Tight) ──
+// Card pointer illumination
 function initCursorCards() {
   const cards = document.querySelectorAll(".cursor-card");
   if (!cards.length) return;
@@ -1666,7 +1660,7 @@ function initCursorCards() {
   document.addEventListener("pointermove", handlePointerMovement, { passive: true });
 }
 
-// ── Interactive Dot Matrix Title Typography (Canvas LED Grid) ─────
+// Dot matrix title
 function initDotMatrixTitle() {
   const container = document.getElementById("dotMatrixTitle");
   const canvas = document.getElementById("dotMatrixCanvas");
@@ -1843,7 +1837,7 @@ function initDotMatrixTitle() {
 
     const isLight = document.documentElement.getAttribute("data-theme") === "light";
 
-    // 1. Inactive Background Dots (subtle hint on dark, ultra-faint on light so no gray box appears)
+    // Inactive dots
     ctx.fillStyle = isLight ? "rgba(148, 163, 184, 0.025)" : "rgba(255, 255, 255, 0.04)";
     ctx.beginPath();
     const inactiveRadius = (dotSize * 0.5) * 0.65;
@@ -1856,7 +1850,7 @@ function initDotMatrixTitle() {
     }
     ctx.fill();
 
-    // 2. Active Illuminated Dots with Multi-Stop Glowing Gradient
+    // Active dots
     const grad = ctx.createLinearGradient(offsetX, 0, offsetX + cols * step, 0);
     if (isLight) {
       grad.addColorStop(0.0, "#0369a1");
@@ -1917,9 +1911,7 @@ function initDotMatrixTitle() {
   });
 }
 
-// ══════════════════════════════════════════════════════════════════
-//  INIT
-// ══════════════════════════════════════════════════════════════════
+// Initialization
 
 // Pause UMAP rotation when tab is hidden, resume when tab becomes visible
 document.addEventListener("visibilitychange", () => {
